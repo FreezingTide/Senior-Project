@@ -53,7 +53,7 @@ import com.research.activityinvoker.model.PackageDataObject;
 import com.research.activityinvoker.model.TooltipRequiredNode;
 
 /* Comment Out, Additional utilities for GZIP handling and file utilities specific to model loading
-
+// test
 import org.apache.commons.compress.compressors.gzip.GzipUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.StringUtils;
@@ -89,6 +89,11 @@ import retrofit2.converter.gson.GsonConverterFactory;
 import java.util.HashMap;
 //end
 
+//3rd version
+import java.util.LinkedList;
+import java.util.Queue;
+//end
+
 @RequiresApi(api = Build.VERSION_CODES.R)
 public class ActionFulfilment extends AccessibilityService implements View.OnTouchListener {
 
@@ -102,8 +107,12 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
     JsonApi jsonApi;
 
     // add new
-    private HashMap<String, String> appMap = new HashMap<>(); // hash map for all apps, example of mapping: youtube -> com.google.android.youtube
-    private HashMap<String, HashMap<String, String>> commandMap = new HashMap<>();
+//    private HashMap<String, String> appMap = new HashMap<>(); // hash map for all apps, example of mapping: youtube -> com.google.android.youtube
+//    private HashMap<String, HashMap<String, String>> commandMap = new HashMap<>();
+    // end
+
+    // 3rd version
+    private HashMap<String, String> appMap = new HashMap<>();
     // end
 
     ArrayList<String> outputArr = new ArrayList<>();
@@ -712,37 +721,150 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 // ***********commented out END
 
     // add new setupCommandMappings function
-    private void setupCommandMappings() {
-        commandMap.put("open", appMap); // Maps 'open' to the appMap of app names to package names
-    }
+//    private void setupCommandMappings() {
+//        commandMap.put("open", appMap); // Maps 'open' to the appMap of app names to package names
+//    }
     //end
 
     // add new executeCommand(), replace old one
+//    private void executeCommand(String sentence) {
+//        sentence = formatNumberInCommand(sentence).trim();
+//        String[] words = sentence.split(" ", 2); // Split into action and parameter
+//
+//
+//        if (words.length == 0) return;
+//
+//
+//        String action = words[0].toLowerCase();
+//        String parameter = words.length > 1 ? words[1].toLowerCase() : "";
+//
+//
+//        // Check if "open" command exists in commandMap
+//        if (commandMap.containsKey(action)) {
+//            HashMap<String, String> appMap = commandMap.get(action); // Get the "open" map
+//
+//
+//            // Check if the app is in appMap
+//            if (appMap.containsKey(parameter)) {
+//                openApp(parameter); // Open app if found in appMap
+//            } else {
+//                Toast.makeText(getApplicationContext(), "App not installed", Toast.LENGTH_SHORT).show();
+//            }
+//        }
+//    }
+
+// 3rd version (Queue method)
+
+    // To keep track of the current active app
+    private String currentActiveApp = null;
+
     private void executeCommand(String sentence) {
-        sentence = formatNumberInCommand(sentence).trim();
-        String[] words = sentence.split(" ", 2); // Split into action and parameter
+        Queue<String> tokens = new LinkedList<>(Arrays.asList(sentence.trim().toLowerCase().split(" ")));
+        String currentAction = null;
+
+        while (!tokens.isEmpty()) {
+            String token = tokens.poll();
+
+            switch (token) {
+                case "open":
+                    currentAction = "open";
+                    String appName = tokens.isEmpty() ? null : tokens.poll();
+
+                    if (appName != null && appMap.containsKey(appName)) {
+                        Log.d("ExecuteCommand", "Executing open command for app: " + appName);
+                        openApp(appName);
+                        currentActiveApp = appName; // Set currentActiveApp to the last opened app
+
+                        // Check if a search command follows immediately
+                        if (!tokens.isEmpty() && tokens.peek().equals("search")) {
+                            tokens.poll(); // Remove "search" token
+                            StringBuilder searchQuery = new StringBuilder();
+                            while (!tokens.isEmpty()) {
+                                searchQuery.append(tokens.poll()).append(" ");
+                            }
+                            Log.d("ExecuteCommand", "Executing search in " + appName + " for query: " + searchQuery.toString().trim());
+                            performAppSearch(appName, searchQuery.toString().trim());
+                        }
+                    } else {
+                        Log.d("ExecuteCommand", "App not found in appMap: " + appName);
+                    }
+                    break;
+
+//                case "close":
+//                    String appToClose = tokens.isEmpty() ? null : tokens.poll();
 
 
-        if (words.length == 0) return;
+                case "search":
+                    // If "search" is issued standalone, use the current active app
+                    StringBuilder searchQuery = new StringBuilder();
+                    while (!tokens.isEmpty()) {
+                        searchQuery.append(tokens.poll()).append(" ");
+                    }
+
+                    if (currentActiveApp != null) {
+                        Log.d("ExecuteCommand", "Executing search in " + currentActiveApp + " for query: " + searchQuery.toString().trim());
+                        performAppSearch(currentActiveApp, searchQuery.toString().trim());
+                    } else {
+                        Log.d("ExecuteCommand", "No app context for search. Did you mean 'open [app] and search [query]'?");
+                    }
+                    break;
 
 
-        String action = words[0].toLowerCase();
-        String parameter = words.length > 1 ? words[1].toLowerCase() : "";
+                case "go":
+                    if (!tokens.isEmpty() && tokens.peek().equals("home")) {
+                        tokens.poll(); // Remove "home" token
+                        Log.d("ExecuteCommand", "Executing go home command");
 
+                        Intent homeIntent = new Intent(Intent.ACTION_MAIN);
+                        homeIntent.addCategory(Intent.CATEGORY_HOME);
+                        homeIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(homeIntent);
+                    }
+                    break;
 
-        // Check if "open" command exists in commandMap
-        if (commandMap.containsKey(action)) {
-            HashMap<String, String> appMap = commandMap.get(action); // Get the "open" map
-
-
-            // Check if the app is in appMap
-            if (appMap.containsKey(parameter)) {
-                openApp(parameter); // Open app if found in appMap
-            } else {
-                Toast.makeText(getApplicationContext(), "App not installed", Toast.LENGTH_SHORT).show();
+                default:
+                    Log.d("ExecuteCommand", "Unrecognized command part: " + token);
             }
         }
+        Log.d("ExecuteCommand", "Command execution completed.");
     }
+
+    // Define performAppSearch to handle specific in-app searches for YouTube, Google Maps, etc.
+    private void performAppSearch(String appName, String query) {
+        if ("youtube".equals(appName)) {
+            Log.d("YouTubeSearch", "Searching YouTube for: " + query);
+            Toast.makeText(getApplicationContext(), "Searching YouTube for: " + query, Toast.LENGTH_SHORT).show();
+
+            try {
+                Intent intent = new Intent(Intent.ACTION_SEARCH);
+                intent.setPackage("com.google.android.youtube");
+                intent.putExtra("query", query);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            } catch (ActivityNotFoundException e) {
+                Log.d("YouTubeSearch", "YouTube app not found");
+                Toast.makeText(getApplicationContext(), "YouTube app not installed", Toast.LENGTH_SHORT).show();
+            }
+        } else if ("maps".equals(appName) || "google maps".equals(appName)) {
+            Log.d("GoogleMapsSearch", "Searching Google Maps for: " + query);
+            Toast.makeText(getApplicationContext(), "Searching Google Maps for: " + query, Toast.LENGTH_SHORT).show();
+
+            try {
+                Uri gmmIntentUri = Uri.parse("geo:0,0?q=" + Uri.encode(query));
+                Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+                mapIntent.setPackage("com.google.android.apps.maps");
+                mapIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(mapIntent);
+            } catch (ActivityNotFoundException e) {
+                Log.d("GoogleMapsSearch", "Google Maps app not found");
+                Toast.makeText(getApplicationContext(), "Google Maps app not installed", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Log.d("AppSearch", "Search not implemented for app: " + appName);
+            Toast.makeText(getApplicationContext(), "Search not available for " + appName, Toast.LENGTH_SHORT).show();
+        }
+    }
+// end 3rd version
 
 //    private void executeCommand(String sentence) {
 //        // Step 1: Tokenize the sentence
@@ -752,7 +874,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 //            Log.d("TokenizeCommand", "Token: " + token);
 //        }
 
-          // Step 2: Find mappings
+    // Step 2: Find mappings
 
 
 
@@ -940,7 +1062,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
 
         // add new
-        setupCommandMappings(); // Ensure mappings are set up when service connects
+//        setupCommandMappings(); // Ensure mappings are set up when service connects
         //end
         Date date = new Date();
         currentTime = date.getTime();
@@ -952,6 +1074,21 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         Log.d(debugLogTag, "Service Connected");
         loadAppNames();
         //createText2VecModel();
+
+        //3rd version
+        // Add test command here for manual testing
+//        String testCommand = "open youtube";
+        String testCommand = "open youtube and search how to cook a steak";
+//        String testCommand = "open maps and search hi";
+//        String testCommand = "open youtube";
+        executeCommand(testCommand); // This simulates the command input without using the microphone
+
+//        String testCommand2 = "search how to cook";
+//        executeCommand(testCommand2);
+
+//        openApp("com.google.android.youtube");
+//        openApp("youtube");
+        //end 3rdversion
 
         autoReloadHandler.post(runnable);
     }
