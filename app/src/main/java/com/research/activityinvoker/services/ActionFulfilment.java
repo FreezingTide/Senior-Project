@@ -115,6 +115,20 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
     private HashMap<String, String> appMap = new HashMap<>();
     // end
 
+    private static final HashMap<String, Integer> numberWords = new HashMap<String, Integer>() {{
+        put("one", 1);
+        put("two", 2);
+        put("three", 3);
+        put("four", 4);
+        put("five", 5);
+        put("six", 6);
+        put("seven", 7);
+        put("eight", 8);
+        put("nine", 9);
+        put("ten", 10);
+        // Add more if needed
+    }};
+
     ArrayList<String> outputArr = new ArrayList<>();
     ArrayList<AccessibilityNodeInfo> editableNodes = new ArrayList<>();
     ArrayList<String> uiElements = new ArrayList<String>();
@@ -692,6 +706,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 //
 //                            if (app.startsWith("app:")) {
 //                                app = app.substring(4);
+//                    }
 //                            }
 //
 //                            if (component.startsWith("component:")) {
@@ -701,7 +716,6 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 //
 //                        }
 //
-//                    }
 //                }
 //
 //                @Override
@@ -822,11 +836,102 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
                     }
                     break;
 
+
+                case "tap":
+                case "click":  // Handle both "tap" and "click"
+                    if (!tokens.isEmpty() && tokens.peek().equals("number")) {
+                        tokens.poll(); // Remove "number" token
+                        String numberString = tokens.isEmpty() ? null : tokens.poll(); // Get the number text
+
+                        if (numberString != null) {
+                            Integer number;
+                            // Check if the numberString is a digit (e.g., "4") or a word (e.g., "four")
+                            if (TextUtils.isDigitsOnly(numberString)) {
+                                number = Integer.parseInt(numberString);  // Parse directly if it's a digit
+                            } else {
+                                // Convert word to number if necessary
+                                number = numberWords.get(numberString);  // Get the integer from the HashMap
+                            }
+
+                            if (number != null) {  // If a valid number is found
+                                Log.d("ExecuteCommand", "Executing tap/click command for number: " + number);
+                                String buttonText = String.valueOf(number); // Convert number to text for clickButtonByText
+                                boolean isClicked = clickButtonByText(buttonText);  // Call clickButtonByText with the number as text
+
+                                if (isClicked) {
+                                    Log.d("ExecuteCommand", "Successfully tapped/clicked the number: " + number);
+                                } else {
+                                    Log.d("ExecuteCommand", "Could not find button for number: " + number);
+                                }
+                            } else {
+                                Log.d("ExecuteCommand", "Invalid number in tap/click command: " + numberString);
+                            }
+                        } else {
+                            Log.d("ExecuteCommand", "No number specified after tap/click.");
+                        }
+                    }
+                    break;
+
+                case "swipe":
+                    // Handling swipe commands
+                    if (!tokens.isEmpty()) {
+                        String direction = tokens.poll();
+                        if ("left".equals(direction)) {
+                            Log.d("ExecuteCommand", "Executing swipe left command");
+                            performSwipeLeft(this);
+                        } else if ("right".equals(direction)) {
+                            Log.d("ExecuteCommand", "Executing swipe right command");
+                            performSwipeRight(this);
+                        } else {
+                            Log.d("ExecuteCommand", "Unrecognized swipe direction: " + direction);
+                        }
+                    }
+                    break;
+
+
+
                 default:
                     Log.d("ExecuteCommand", "Unrecognized command part: " + token);
             }
         }
         Log.d("ExecuteCommand", "Command execution completed.");
+    }
+
+    // Perform a swipe left action
+    private void performSwipeLeft(Context context) {
+        // Get the current screen dimensions
+        int screenWidth = context.getResources().getDisplayMetrics().widthPixels;
+        int screenHeight = context.getResources().getDisplayMetrics().heightPixels;
+        // Create a Path for the swipe action
+        Path swipePath = new Path();
+        swipePath.moveTo(screenWidth * 0.8f, screenHeight / 2); // Start point (right side)
+        swipePath.lineTo(screenWidth * 0.2f, screenHeight / 2); // End point (left side)
+        // Create a gesture builder for swipe action
+        GestureDescription.StrokeDescription stroke = new GestureDescription.StrokeDescription(swipePath, 0, 200); // Duration in milliseconds
+        // Create and execute the gesture
+        GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
+        gestureBuilder.addStroke(stroke);
+        // Dispatch the gesture to perform the swipe
+        GestureDescription gesture = gestureBuilder.build();
+        dispatchGesture(gesture, null, null);
+    }
+    // Perform a swipe right action
+    private void performSwipeRight(Context context) {
+        // Get the current screen dimensions
+        int screenWidth = context.getResources().getDisplayMetrics().widthPixels;
+        int screenHeight = context.getResources().getDisplayMetrics().heightPixels;
+        // Create a Path for the swipe action
+        Path swipePath = new Path();
+        swipePath.moveTo(screenWidth * 0.2f, screenHeight / 2); // Start point (left side)
+        swipePath.lineTo(screenWidth * 0.8f, screenHeight / 2); // End point (right side)
+        // Create a gesture builder for swipe action
+        GestureDescription.StrokeDescription stroke = new GestureDescription.StrokeDescription(swipePath, 0, 200); // Duration in milliseconds
+        // Create and execute the gesture
+        GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
+        gestureBuilder.addStroke(stroke);
+        // Dispatch the gesture to perform the swipe
+        GestureDescription gesture = gestureBuilder.build();
+        dispatchGesture(gesture, null, null);
     }
 
     // Define performAppSearch to handle specific in-app searches for YouTube, Google Maps, etc.
@@ -1078,10 +1183,10 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         //3rd version
         // Add test command here for manual testing
 //        String testCommand = "open youtube";
-        String testCommand = "open youtube and search how to cook a steak";
+//        String testCommand = "open youtube and search how to cook a steak";
 //        String testCommand = "open maps and search hi";
 //        String testCommand = "open youtube";
-        executeCommand(testCommand); // This simulates the command input without using the microphone
+//        executeCommand(testCommand); // This simulates the command input without using the microphone
 
 //        String testCommand2 = "search how to cook";
 //        executeCommand(testCommand2);
