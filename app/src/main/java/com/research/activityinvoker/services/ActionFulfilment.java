@@ -160,9 +160,9 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 //    public Word2Vec model;
 
 
-// v9 add new
+// Interface Class Definitions and Structures - By Brennan
 
-    // Hash maps for command handling
+    // Hash maps for command handling - Brennan
     private HashMap<String, Object> commandMap = new HashMap<>();
     private HashMap<String, String> appMap = new HashMap<>();
 
@@ -171,7 +171,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         void executeCommand(String[] tokens);
     }
 
-    // OpenCommand Implementation
+    // OpenCommand Implementation - By Brennan
     public class OpenCommand implements CommandHandler {
 
         @Override
@@ -214,7 +214,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
             }
         }
 
-        // Helper method to get subcommands for an app
+        // Helper method to get subcommands for an app - By Brennan
         private HashMap<String, Object> getSubcommandsForApp(String appName) {
             @SuppressWarnings("unchecked")
             HashMap<String, Object> openCommandMap = (HashMap<String, Object>) commandMap.get("open");
@@ -284,7 +284,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 
 
 
-    // SearchCommand Implementation
+    // SearchCommand Implementation - By Brennan
     public class SearchCommand implements CommandHandler {
         private final String packageName; // The package name for the app
         private final String actionType; // Custom behavior type (if needed)
@@ -379,6 +379,48 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         }
     }
 
+    // RouteCommand Implementation - By Brennan
+    public class RouteCommand implements CommandHandler {
+
+        @Override
+        public void executeCommand(String[] tokens) {
+            if (tokens.length == 0) {
+                Log.e("RouteCommand", "No location provided.");
+                return;
+            }
+
+            // Preprocess tokens to remove filler words like "to"
+            String[] filteredTokens = preprocessRouteTokens(tokens);
+
+            // Join the filtered tokens to form the location query
+            String locationQuery = String.join(" ", filteredTokens);
+            Log.d("RouteCommand", "Routing to location: " + locationQuery);
+
+            // Create an Intent to start navigation
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setPackage("com.google.android.apps.maps"); // Use Google Maps
+            intent.setData(Uri.parse("google.navigation:q=" + Uri.encode(locationQuery))); // Encode the location query
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            try {
+                startActivity(intent);
+            } catch (Exception e) {
+                Log.e("RouteCommand", "Failed to start navigation to: " + locationQuery, e);
+            }
+        }
+
+        // Helper method to preprocess tokens for routing
+        private String[] preprocessRouteTokens(String[] tokens) {
+            List<String> filteredTokens = new ArrayList<>();
+            for (String token : tokens) {
+                // Skip filler words
+                if (!token.equalsIgnoreCase("to")) {
+                    filteredTokens.add(token);
+                }
+            }
+            return filteredTokens.toArray(new String[0]);
+        }
+    }
 
 
 
@@ -399,6 +441,7 @@ commandMap
                     └── "action" → SearchCommand("com.google.android.apps.maps", "maps")
  */
 
+// Setup Command Mappings - By Brennan
     private void setupCommandMappings() {
         // Define the search command for YouTube
         HashMap<String, Object> youtubeSearchCommandMap = new HashMap<>();
@@ -411,6 +454,10 @@ commandMap
         // Define the search command for Maps
         HashMap<String, Object> mapsSearchCommandMap = new HashMap<>();
         mapsSearchCommandMap.put("action", new SearchCommand("com.google.android.apps.maps", "maps"));
+
+        // Define the route command for Maps
+        HashMap<String, Object> mapsRouteCommandMap = new HashMap<>();
+        mapsRouteCommandMap.put("action", new RouteCommand());
 
         // Define the "youtube" command
         HashMap<String, Object> youtubeCommandMap = new HashMap<>();
@@ -425,6 +472,7 @@ commandMap
         mapsCommandMap.put("action", null); // No direct action for "maps"
         mapsCommandMap.put("subcommands", new HashMap<String, Object>() {{
             put("search", mapsSearchCommandMap); // Add "search" subcommand for Maps
+            put("route", mapsRouteCommandMap);  // Add "route" subcommand for Maps
         }});
 
         // Define the "open" command
@@ -454,13 +502,20 @@ commandMap
 
         commandMap.put("scroll", scrollCommandMap); // Add "scroll" command to the top level
 
+        // Add "route" command for navigation
+        HashMap<String, Object> routeCommandMap = new HashMap<>();
+        routeCommandMap.put("action", new RouteCommand());
+
+        // Add the "route" command to the top-level command map
+        commandMap.put("route", routeCommandMap);
+
 
         // Log the command map structure
         Log.d("setupCommandMappings", "Command map structure: " + new Gson().toJson(commandMap));
     }
 
 
-
+// Traverse Command Map - By Brennan
     private void traverseCommandMap(String[] tokens, HashMap<String, Object> currentMap, int index) {
         if (index >= tokens.length) {
             Log.d("CommandExecution", "All tokens processed.");
@@ -496,6 +551,7 @@ commandMap
         }
     }
 
+    // Execute Command - By Brennan
     private void executeCommand(String sentence) {
         String[] tokens = sentence.toLowerCase().trim().split(" ");
         traverseCommandMap(tokens, commandMap, 0);
@@ -514,19 +570,36 @@ commandMap
 
         // basic checks for null safety
         AccessibilityNodeInfo source = event.getSource();
-        Log.d("dddd", event.getEventType() + "  " + event.getSource());
-        if (source == null && event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+//        Log.d("dddd", event.getEventType() + "  " + event.getSource());
+//        if (source == null && event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+//            return;
+//        }
+//
+//        if (previousSource != null && source != null && (previousSource.hashCode() == source.hashCode() || previousSource.equals(source))) {
+//            Log.d(debugLogTag, "Blocked event");
+//
+//            return;
+//        }
+//
+//        if (previousEventCode.equals("32") && previousSource != null && event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+//            Log.d(debugLogTag, "Overlapped event");
+//            return;
+//        }
+
+        if (source == null || event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             return;
         }
 
-        if (previousSource != null && source != null && (previousSource.hashCode() == source.hashCode() || previousSource.equals(source))) {
-            Log.d(debugLogTag, "Blocked event");
-
+        // Prevent repeated events
+        if (previousSource != null && source != null &&
+                (previousSource.hashCode() == source.hashCode() || previousSource.equals(source))) {
+            Log.d(debugLogTag, "Blocked duplicate event");
             return;
         }
 
-        if (previousEventCode.equals("32") && previousSource != null && event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            Log.d(debugLogTag, "Overlapped event");
+        if (previousEventCode.equals("32") && previousSource != null &&
+                event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            Log.d(debugLogTag, "Overlapped event blocked");
             return;
         }
 
@@ -1182,7 +1255,7 @@ commandMap
         Log.d(debugLogTag, "Service Connected");
         //createText2VecModel();
 
-        String testCommand = "open youtube and search salt and pepper";
+        String testCommand = "open maps route to ice cream";
 //        String testCommand = "open youtube and search hi and hello";
 
         executeCommand(testCommand); // This simulates the command input without using the microphone
