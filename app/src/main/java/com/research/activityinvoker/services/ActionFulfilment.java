@@ -420,7 +420,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
             List<String> filteredTokens = new ArrayList<>();
             for (String token : tokens) {
                 // Skip filler words
-                if (!token.equalsIgnoreCase("to") && !token.equalsIgnoreCase("nearest") && !token.equalsIgnoreCase("near me")) {
+                if (!token.equalsIgnoreCase("to") && !token.equalsIgnoreCase("nearest") && !token.equalsIgnoreCase("near me") && !token.equalsIgnoreCase("a")) {
                     filteredTokens.add(token);
                 }
             }
@@ -1270,7 +1270,7 @@ commandMap
         Log.d(debugLogTag, "Service Connected");
         //createText2VecModel();
 
-        String testCommand = "please route to nearest dessert shop";
+        String testCommand = "please route to a dessert shop near me";
 //        String testCommand = "open youtube and search hi and hello";
 
         executeCommand(testCommand); // This simulates the command input without using the microphone
