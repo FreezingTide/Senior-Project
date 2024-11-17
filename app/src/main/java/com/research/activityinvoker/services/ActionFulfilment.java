@@ -70,6 +70,7 @@ import java.util.HashMap;
 import android.os.Looper;
 import android.view.KeyEvent;
 import java.io.IOException;
+import android.net.Uri;
 
 
 //end
@@ -160,6 +161,8 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 //    public Word2Vec model;
 
 
+    // v10 add new
+
 // Interface Class Definitions and Structures - By Brennan
 
     // Hash maps for command handling - Brennan
@@ -248,8 +251,8 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 
     }
 
-    // Play youtube video -- by Hei
-    // PlayCommand Implementation
+//    // Play youtube video -- by Hei
+//    // PlayCommand Implementation
     public class PlayCommand implements CommandHandler {
         private final String packageName;
 
@@ -267,22 +270,25 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
             String query = String.join(" ", tokens);
             Log.d("PlayCommand", "Playing YouTube video with query: " + query);
 
-            // Intent for playing a YouTube video
-            Intent intent = new Intent(Intent.ACTION_SEARCH);
-            intent.setPackage(packageName);
-            intent.putExtra("query", query);
-            intent.putExtra("yt_search_mode", "video");
+            // Intent for opening YouTube
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+
+            // Format the URL for playing the video on YouTube
+            String youtubeUrl = "https://www.youtube.com/results?search_query=" + Uri.encode(query);
+
+            // Set the intent data (the YouTube URL)
+            intent.setData(Uri.parse(youtubeUrl));
+            intent.setPackage(packageName);  // Specify the YouTube app
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
             try {
+                // Start activity to open YouTube and perform the search or video play
                 startActivity(intent);
             } catch (Exception e) {
                 Log.e("PlayCommand", "Failed to play video on YouTube.", e);
             }
         }
     }
-
-
 
     // SearchCommand Implementation - By Brennan
     public class SearchCommand implements CommandHandler {
@@ -447,9 +453,15 @@ commandMap
         HashMap<String, Object> youtubeSearchCommandMap = new HashMap<>();
         youtubeSearchCommandMap.put("action", new SearchCommand("com.google.android.youtube", "youtube"));
 
+//        // Define the play command for YouTube
+//        HashMap<String, Object> youtubePlayCommandMap = new HashMap<>();
+//        youtubePlayCommandMap.put("action", new PlayCommand("com.google.android.youtube"));
+
         // Define the play command for YouTube
         HashMap<String, Object> youtubePlayCommandMap = new HashMap<>();
         youtubePlayCommandMap.put("action", new PlayCommand("com.google.android.youtube"));
+
+
 
         // Define the search command for Maps
         HashMap<String, Object> mapsSearchCommandMap = new HashMap<>();
@@ -466,6 +478,9 @@ commandMap
             put("search", youtubeSearchCommandMap); // Add "search" subcommand for YouTube
             put("play", youtubePlayCommandMap);    // Add "play" subcommand for YouTube
         }});
+
+        // Add to the top-level commands
+        commandMap.put("youtube", youtubeCommandMap); // Add "youtube" as a subcommand
 
         // Define the "maps" command
         HashMap<String, Object> mapsCommandMap = new HashMap<>();
