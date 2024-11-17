@@ -160,7 +160,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 //    public Word2Vec model;
 
 
-// v8 add new
+// v9 add new
 
     // Hash maps for command handling
     private HashMap<String, Object> commandMap = new HashMap<>();
@@ -248,6 +248,42 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 
     }
 
+    // Play youtube video -- by Hei
+    // PlayCommand Implementation
+    public class PlayCommand implements CommandHandler {
+        private final String packageName;
+
+        public PlayCommand(String packageName) {
+            this.packageName = packageName;
+        }
+
+        @Override
+        public void executeCommand(String[] tokens) {
+            if (tokens.length == 0) {
+                Log.e("PlayCommand", "No video query provided.");
+                return;
+            }
+
+            String query = String.join(" ", tokens);
+            Log.d("PlayCommand", "Playing YouTube video with query: " + query);
+
+            // Intent for playing a YouTube video
+            Intent intent = new Intent(Intent.ACTION_SEARCH);
+            intent.setPackage(packageName);
+            intent.putExtra("query", query);
+            intent.putExtra("yt_search_mode", "video");
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            try {
+                startActivity(intent);
+            } catch (Exception e) {
+                Log.e("PlayCommand", "Failed to play video on YouTube.", e);
+            }
+        }
+    }
+
+
+
     // SearchCommand Implementation
     public class SearchCommand implements CommandHandler {
         private final String packageName; // The package name for the app
@@ -314,6 +350,37 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         }
     }
 
+    // ScrollCommand Implementation
+    public class ScrollCommand implements CommandHandler {
+
+        @Override
+        public void executeCommand(String[] tokens) {
+            if (tokens.length == 0) {
+                Log.e("ScrollCommand", "No direction specified.");
+                return;
+            }
+
+            String direction = tokens[0].toLowerCase();
+            int distance = tokens.length > 1 ? Integer.parseInt(tokens[1]) : 100; // Default distance
+
+            if (direction.equals("up")) {
+                performScroll(-distance);
+            } else if (direction.equals("down")) {
+                performScroll(distance);
+            } else {
+                Log.e("ScrollCommand", "Invalid direction: " + direction);
+            }
+        }
+
+        private void performScroll(int distance) {
+            // Simulate scrolling (requires AccessibilityService for full functionality)
+            Log.d("ScrollCommand", "Scrolling by distance: " + distance);
+            // Add implementation using AccessibilityService or gesture APIs.
+        }
+    }
+
+
+
 
 /* setupCommandMappings()
 commandMap
@@ -337,6 +404,10 @@ commandMap
         HashMap<String, Object> youtubeSearchCommandMap = new HashMap<>();
         youtubeSearchCommandMap.put("action", new SearchCommand("com.google.android.youtube", "youtube"));
 
+        // Define the play command for YouTube
+        HashMap<String, Object> youtubePlayCommandMap = new HashMap<>();
+        youtubePlayCommandMap.put("action", new PlayCommand("com.google.android.youtube"));
+
         // Define the search command for Maps
         HashMap<String, Object> mapsSearchCommandMap = new HashMap<>();
         mapsSearchCommandMap.put("action", new SearchCommand("com.google.android.apps.maps", "maps"));
@@ -346,6 +417,7 @@ commandMap
         youtubeCommandMap.put("action", null); // No direct action for "youtube"
         youtubeCommandMap.put("subcommands", new HashMap<String, Object>() {{
             put("search", youtubeSearchCommandMap); // Add "search" subcommand for YouTube
+            put("play", youtubePlayCommandMap);    // Add "play" subcommand for YouTube
         }});
 
         // Define the "maps" command
@@ -375,6 +447,13 @@ commandMap
         commandMap.put("open", openCommandMap);
         commandMap.put("home", goHomeCommandMap); // Add "home" command
         commandMap.put("back", goBackCommandMap); // Add "back" command
+
+        // Add scroll commands
+        HashMap<String, Object> scrollCommandMap = new HashMap<>();
+        scrollCommandMap.put("action", new ScrollCommand());
+
+        commandMap.put("scroll", scrollCommandMap); // Add "scroll" command to the top level
+
 
         // Log the command map structure
         Log.d("setupCommandMappings", "Command map structure: " + new Gson().toJson(commandMap));
