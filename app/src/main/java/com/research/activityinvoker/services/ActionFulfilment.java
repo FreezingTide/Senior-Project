@@ -68,6 +68,9 @@ import retrofit2.converter.gson.GsonConverterFactory;
 //add new
 import java.util.HashMap;
 import android.os.Looper;
+import android.view.KeyEvent;
+import java.io.IOException;
+
 
 //end
 
@@ -285,6 +288,33 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         }
     }
 
+    // GoHomeCommand Implementation
+    public class GoHomeCommand implements CommandHandler {
+        @Override
+        public void executeCommand(String[] tokens) {
+            Log.d("GoHomeCommand", "Going to the home screen.");
+            Intent intent = new Intent(Intent.ACTION_MAIN);
+            intent.addCategory(Intent.CATEGORY_HOME);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        }
+    }
+
+    // GoBackCommand Implementation
+    public class GoBackCommand implements CommandHandler {
+        @Override
+        public void executeCommand(String[] tokens) {
+            Log.d("GoBackCommand", "Going back.");
+            // Simulate a back button press
+            try {
+                Runtime.getRuntime().exec("input keyevent " + KeyEvent.KEYCODE_BACK);
+            } catch (IOException e) {
+                Log.e("GoBackCommand", "Failed to execute back command.", e);
+            }
+        }
+    }
+
+
 /* setupCommandMappings()
 commandMap
 └── "open" → openCommandMap
@@ -333,12 +363,23 @@ commandMap
             put("maps", mapsCommandMap); // Add "maps" as a subcommand
         }});
 
-        // Add "open" to the main command map
+        // Add "go home" command
+        HashMap<String, Object> goHomeCommandMap = new HashMap<>();
+        goHomeCommandMap.put("action", new GoHomeCommand());
+
+        // Add "go back" command
+        HashMap<String, Object> goBackCommandMap = new HashMap<>();
+        goBackCommandMap.put("action", new GoBackCommand());
+
+        // Add top-level commands to the main command map
         commandMap.put("open", openCommandMap);
+        commandMap.put("home", goHomeCommandMap); // Add "home" command
+        commandMap.put("back", goBackCommandMap); // Add "back" command
 
         // Log the command map structure
         Log.d("setupCommandMappings", "Command map structure: " + new Gson().toJson(commandMap));
     }
+
 
 
     private void traverseCommandMap(String[] tokens, HashMap<String, Object> currentMap, int index) {
