@@ -52,26 +52,6 @@ import com.research.activityinvoker.model.LabelFoundNode;
 import com.research.activityinvoker.model.PackageDataObject;
 import com.research.activityinvoker.model.TooltipRequiredNode;
 
-/* Comment Out, Additional utilities for GZIP handling and file utilities specific to model loading
-// test
-import org.apache.commons.compress.compressors.gzip.GzipUtils;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang.StringUtils;
- */
-
-/* Comment out, these are machine learning, ML Imports (Word2Vec, deep learning, and ND4J libraries)
-import org.deeplearning4j.models.embeddings.inmemory.InMemoryLookupTable;
-import org.deeplearning4j.models.embeddings.learning.impl.elements.SkipGram;
-import org.deeplearning4j.models.embeddings.loader.WordVectorSerializer;
-import org.deeplearning4j.models.word2vec.VocabWord;
-import org.deeplearning4j.models.word2vec.Word2Vec;
-import org.deeplearning4j.models.word2vec.wordstore.VocabCache;
-import org.deeplearning4j.models.word2vec.wordstore.inmemory.AbstractCache;
-import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.factory.Nd4j;
-import org.nd4j.linalg.ops.transforms.Transforms;
-*/
-
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -87,11 +67,8 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 //add new
 import java.util.HashMap;
-//end
+import android.os.Looper;
 
-//3rd version
-import java.util.LinkedList;
-import java.util.Queue;
 //end
 
 @RequiresApi(api = Build.VERSION_CODES.R)
@@ -105,15 +82,6 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
     TextView inputTxt;
     Retrofit retrofit;
     JsonApi jsonApi;
-
-    // add new
-//    private HashMap<String, String> appMap = new HashMap<>(); // hash map for all apps, example of mapping: youtube -> com.google.android.youtube
-//    private HashMap<String, HashMap<String, String>> commandMap = new HashMap<>();
-    // end
-
-    // 3rd version
-    private HashMap<String, String> appMap = new HashMap<>();
-    // end
 
     ArrayList<String> outputArr = new ArrayList<>();
     ArrayList<AccessibilityNodeInfo> editableNodes = new ArrayList<>();
@@ -187,6 +155,234 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 
     // Comment out
 //    public Word2Vec model;
+
+
+// v8 add new
+
+    // Hash maps for command handling
+    private HashMap<String, Object> commandMap = new HashMap<>();
+    private HashMap<String, String> appMap = new HashMap<>();
+
+    // CommandHandler interface
+    public interface CommandHandler {
+        void executeCommand(String[] tokens);
+    }
+
+    // OpenCommand Implementation
+    public class OpenCommand implements CommandHandler {
+
+        @Override
+        public void executeCommand(String[] tokens) {
+            if (tokens.length == 0) {
+                Log.e("OpenCommand", "No app name provided.");
+                return;
+            }
+
+            String appName = tokens[0];
+            String packageName = appMap.get(appName);
+
+            if (packageName == null) {
+                Log.e("OpenCommand", "App not mapped in appMap: " + appName);
+                return;
+            }
+
+            Intent intent = getPackageManager().getLaunchIntentForPackage(packageName);
+            if (intent == null) {
+                Log.e("OpenCommand", "App not found for: " + appName);
+                return;
+            }
+
+            // Open the app
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+            Log.d("OpenCommand", "Opened app: " + appName);
+
+            // Handle remaining tokens if present
+            if (tokens.length > 1) {
+                String[] remainingTokens = Arrays.copyOfRange(tokens, 1, tokens.length);
+                Log.d("OpenCommand", "Passing remaining tokens to subcommands: " + Arrays.toString(remainingTokens));
+
+                HashMap<String, Object> appSubcommands = getSubcommandsForApp(appName);
+                if (appSubcommands != null) {
+                    traverseCommandMap(remainingTokens, appSubcommands, 0);
+                } else {
+                    Log.e("OpenCommand", "No subcommands for app: " + appName);
+                }
+            }
+        }
+
+        // Helper method to get subcommands for an app
+        private HashMap<String, Object> getSubcommandsForApp(String appName) {
+            @SuppressWarnings("unchecked")
+            HashMap<String, Object> openCommandMap = (HashMap<String, Object>) commandMap.get("open");
+            if (openCommandMap == null) {
+                Log.e("OpenCommand", "'open' command not found in commandMap.");
+                return null;
+            }
+
+            @SuppressWarnings("unchecked")
+            HashMap<String, Object> subcommands = (HashMap<String, Object>) openCommandMap.get("subcommands");
+            if (subcommands == null) {
+                Log.e("OpenCommand", "No subcommands for 'open'.");
+                return null;
+            }
+
+            @SuppressWarnings("unchecked")
+            HashMap<String, Object> appCommandMap = (HashMap<String, Object>) subcommands.get(appName);
+            if (appCommandMap == null) {
+                Log.e("OpenCommand", "No mappings for app: " + appName);
+                return null;
+            }
+
+            @SuppressWarnings("unchecked")
+            HashMap<String, Object> appSubcommands = (HashMap<String, Object>) appCommandMap.get("subcommands");
+            if (appSubcommands == null) {
+                Log.e("OpenCommand", "No subcommands for app: " + appName);
+            }
+
+            return appSubcommands;
+        }
+
+    }
+
+    // SearchCommand Implementation
+    public class SearchCommand implements CommandHandler {
+        private final String packageName; // The package name for the app
+        private final String actionType; // Custom behavior type (if needed)
+
+        // Constructor to initialize the app's package name or behavior
+        public SearchCommand(String packageName, String actionType) {
+            this.packageName = packageName;
+            this.actionType = actionType;
+        }
+
+        @Override
+        public void executeCommand(String[] tokens) {
+            if (tokens.length == 0) {
+                Log.e("SearchCommand", "No search query provided.");
+                return;
+            }
+
+            String query = String.join(" ", tokens);
+            Log.d("SearchCommand", "Searching in " + packageName + " with query: " + query);
+
+            // Intent for searching in different apps
+            if ("youtube".equals(actionType)) {
+                Intent intent = new Intent(Intent.ACTION_SEARCH);
+                intent.setPackage(packageName); // YouTube's package
+                intent.putExtra("query", query);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            } else if ("maps".equals(actionType)) {
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setPackage(packageName); // Maps' package
+                intent.setData(Uri.parse("geo:0,0?q=" + Uri.encode(query))); // Use geo URI for Maps
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            } else {
+                Log.e("SearchCommand", "Unsupported action type: " + actionType);
+            }
+        }
+    }
+
+/* setupCommandMappings()
+commandMap
+└── "open" → openCommandMap
+    ├── "action" → OpenCommand
+    └── "subcommands" → openSubcommands
+        ├── "youtube" → youtubeCommandMap
+        │   ├── "action" → null (no direct action for "youtube")
+        │   └── "subcommands" → youtubeSubcommands
+        │       └── "search" → youtubeSearchCommandMap
+        │           └── "action" → SearchCommand("com.google.android.youtube", "youtube")
+        └── "maps" → mapsCommandMap
+            ├── "action" → null (no direct action for "maps")
+            └── "subcommands" → mapsSubcommands
+                └── "search" → mapsSearchCommandMap
+                    └── "action" → SearchCommand("com.google.android.apps.maps", "maps")
+ */
+
+    private void setupCommandMappings() {
+        // Define the search command for YouTube
+        HashMap<String, Object> youtubeSearchCommandMap = new HashMap<>();
+        youtubeSearchCommandMap.put("action", new SearchCommand("com.google.android.youtube", "youtube"));
+
+        // Define the search command for Maps
+        HashMap<String, Object> mapsSearchCommandMap = new HashMap<>();
+        mapsSearchCommandMap.put("action", new SearchCommand("com.google.android.apps.maps", "maps"));
+
+        // Define the "youtube" command
+        HashMap<String, Object> youtubeCommandMap = new HashMap<>();
+        youtubeCommandMap.put("action", null); // No direct action for "youtube"
+        youtubeCommandMap.put("subcommands", new HashMap<String, Object>() {{
+            put("search", youtubeSearchCommandMap); // Add "search" subcommand for YouTube
+        }});
+
+        // Define the "maps" command
+        HashMap<String, Object> mapsCommandMap = new HashMap<>();
+        mapsCommandMap.put("action", null); // No direct action for "maps"
+        mapsCommandMap.put("subcommands", new HashMap<String, Object>() {{
+            put("search", mapsSearchCommandMap); // Add "search" subcommand for Maps
+        }});
+
+        // Define the "open" command
+        HashMap<String, Object> openCommandMap = new HashMap<>();
+        openCommandMap.put("action", new OpenCommand());
+        openCommandMap.put("subcommands", new HashMap<String, Object>() {{
+            put("youtube", youtubeCommandMap); // Add "youtube" as a subcommand
+            put("maps", mapsCommandMap); // Add "maps" as a subcommand
+        }});
+
+        // Add "open" to the main command map
+        commandMap.put("open", openCommandMap);
+
+        // Log the command map structure
+        Log.d("setupCommandMappings", "Command map structure: " + new Gson().toJson(commandMap));
+    }
+
+
+    private void traverseCommandMap(String[] tokens, HashMap<String, Object> currentMap, int index) {
+        if (index >= tokens.length) {
+            Log.d("CommandExecution", "All tokens processed.");
+            return;
+        }
+
+        String currentToken = tokens[index];
+        if (!currentMap.containsKey(currentToken)) {
+            // Log and skip unrecognized token
+            Log.w("CommandExecution", "Skipping unrecognized token: " + currentToken);
+            traverseCommandMap(tokens, currentMap, index + 1); // Move to the next token
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        HashMap<String, Object> entry = (HashMap<String, Object>) currentMap.get(currentToken);
+
+        CommandHandler action = (CommandHandler) entry.get("action");
+        if (action != null) {
+            String[] remainingTokens = Arrays.copyOfRange(tokens, index + 1, tokens.length);
+            Log.d("CommandExecution", "Executing action for token: " + currentToken);
+            action.executeCommand(remainingTokens);
+            return; // Stop further processing after executing the action
+        }
+
+        @SuppressWarnings("unchecked")
+        HashMap<String, Object> subcommands = (HashMap<String, Object>) entry.get("subcommands");
+        if (subcommands != null) {
+            Log.d("CommandExecution", "Traversing subcommands for token: " + currentToken);
+            traverseCommandMap(tokens, subcommands, index + 1);
+        } else {
+            Log.e("CommandExecution", "No subcommands for token: " + currentToken);
+        }
+    }
+
+    private void executeCommand(String sentence) {
+        String[] tokens = sentence.toLowerCase().trim().split(" ");
+        traverseCommandMap(tokens, commandMap, 0);
+    }
+
+
+    // v8 end
 
     // ************ comment out old onAccessibilityEvent()
     @Override
@@ -720,198 +916,6 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 //    }
 // ***********commented out END
 
-    // add new setupCommandMappings function
-//    private void setupCommandMappings() {
-//        commandMap.put("open", appMap); // Maps 'open' to the appMap of app names to package names
-//    }
-    //end
-
-    // add new executeCommand(), replace old one
-//    private void executeCommand(String sentence) {
-//        sentence = formatNumberInCommand(sentence).trim();
-//        String[] words = sentence.split(" ", 2); // Split into action and parameter
-//
-//
-//        if (words.length == 0) return;
-//
-//
-//        String action = words[0].toLowerCase();
-//        String parameter = words.length > 1 ? words[1].toLowerCase() : "";
-//
-//
-//        // Check if "open" command exists in commandMap
-//        if (commandMap.containsKey(action)) {
-//            HashMap<String, String> appMap = commandMap.get(action); // Get the "open" map
-//
-//
-//            // Check if the app is in appMap
-//            if (appMap.containsKey(parameter)) {
-//                openApp(parameter); // Open app if found in appMap
-//            } else {
-//                Toast.makeText(getApplicationContext(), "App not installed", Toast.LENGTH_SHORT).show();
-//            }
-//        }
-//    }
-
-// 3rd version (Queue method)
-
-    // To keep track of the current active app
-    private String currentActiveApp = null;
-
-    private void executeCommand(String sentence) {
-        Queue<String> tokens = new LinkedList<>(Arrays.asList(sentence.trim().toLowerCase().split(" ")));
-        String currentAction = null;
-
-        while (!tokens.isEmpty()) {
-            String token = tokens.poll();
-
-            switch (token) {
-                case "open":
-                    currentAction = "open";
-                    String appName = tokens.isEmpty() ? null : tokens.poll();
-
-                    if (appName != null && appMap.containsKey(appName)) {
-                        Log.d("ExecuteCommand", "Executing open command for app: " + appName);
-                        openApp(appName);
-                        currentActiveApp = appName; // Set currentActiveApp to the last opened app
-
-                        // Check if a search command follows immediately
-                        if (!tokens.isEmpty() && tokens.peek().equals("search")) {
-                            tokens.poll(); // Remove "search" token
-                            StringBuilder searchQuery = new StringBuilder();
-                            while (!tokens.isEmpty()) {
-                                searchQuery.append(tokens.poll()).append(" ");
-                            }
-                            Log.d("ExecuteCommand", "Executing search in " + appName + " for query: " + searchQuery.toString().trim());
-                            performAppSearch(appName, searchQuery.toString().trim());
-                        }
-                    } else {
-                        Log.d("ExecuteCommand", "App not found in appMap: " + appName);
-                    }
-                    break;
-
-                case "search":
-                    // If "search" is issued standalone, use the current active app
-                    StringBuilder searchQuery = new StringBuilder();
-                    while (!tokens.isEmpty()) {
-                        searchQuery.append(tokens.poll()).append(" ");
-                    }
-
-                    if (currentActiveApp != null) {
-                        Log.d("ExecuteCommand", "Executing search in " + currentActiveApp + " for query: " + searchQuery.toString().trim());
-                        performAppSearch(currentActiveApp, searchQuery.toString().trim());
-                    } else {
-                        Log.d("ExecuteCommand", "No app context for search. Did you mean 'open [app] and search [query]'?");
-                    }
-                    break;
-
-                default:
-                    Log.d("ExecuteCommand", "Unrecognized command part: " + token);
-            }
-        }
-        Log.d("ExecuteCommand", "Command execution completed.");
-    }
-
-    // Define performAppSearch to handle specific in-app searches for YouTube, Google Maps, etc.
-    private void performAppSearch(String appName, String query) {
-        if ("youtube".equals(appName)) {
-            Log.d("YouTubeSearch", "Searching YouTube for: " + query);
-            Toast.makeText(getApplicationContext(), "Searching YouTube for: " + query, Toast.LENGTH_SHORT).show();
-
-            try {
-                Intent intent = new Intent(Intent.ACTION_SEARCH);
-                intent.setPackage("com.google.android.youtube");
-                intent.putExtra("query", query);
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(intent);
-            } catch (ActivityNotFoundException e) {
-                Log.d("YouTubeSearch", "YouTube app not found");
-                Toast.makeText(getApplicationContext(), "YouTube app not installed", Toast.LENGTH_SHORT).show();
-            }
-        } else if ("maps".equals(appName) || "google maps".equals(appName)) {
-            Log.d("GoogleMapsSearch", "Searching Google Maps for: " + query);
-            Toast.makeText(getApplicationContext(), "Searching Google Maps for: " + query, Toast.LENGTH_SHORT).show();
-
-            try {
-                Uri gmmIntentUri = Uri.parse("geo:0,0?q=" + Uri.encode(query));
-                Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
-                mapIntent.setPackage("com.google.android.apps.maps");
-                mapIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(mapIntent);
-            } catch (ActivityNotFoundException e) {
-                Log.d("GoogleMapsSearch", "Google Maps app not found");
-                Toast.makeText(getApplicationContext(), "Google Maps app not installed", Toast.LENGTH_SHORT).show();
-            }
-        } else {
-            Log.d("AppSearch", "Search not implemented for app: " + appName);
-            Toast.makeText(getApplicationContext(), "Search not available for " + appName, Toast.LENGTH_SHORT).show();
-        }
-    }
-// end 3rd version
-
-//    private void executeCommand(String sentence) {
-//        // Step 1: Tokenize the sentence
-//        String[] tokens = sentence.trim().toLowerCase().split(" ");
-//
-//        for (String token : tokens) {
-//            Log.d("TokenizeCommand", "Token: " + token);
-//        }
-
-          // Step 2: Find mappings
-
-
-
-//    }
-
-
-    // end
-
-    // add new setupCommandMappings function
-//    private void setupCommandMappings() {
-//        // Both "open" and "search" commands now reference appMap
-//        commandMap.put("open", appMap); // "open" maps to app names and their package names
-//    }
-// end
-
-    // add new executeCommand(), replace old one, this is attempted open youtube + open settings
-//    private void executeCommand(String sentence) {
-//        // Step 1: Tokenize the entire sentence
-//        String[] tokens = sentence.trim().toLowerCase().split(" ");
-//
-//        if (tokens.length == 0) return;
-//
-//        // Step 2: Traverse through tokens and identify action-target pairs
-//        for (int i = 0; i < tokens.length; i++) {
-//            String action = tokens[i];
-//            Log.d("ExecuteCommand", "Processing token: " + action);
-//
-//            // Check if the token is a recognized action in commandMap
-//            if (commandMap.containsKey(action)) {
-//                HashMap<String, String> actionMap = commandMap.get(action);
-//
-//                // Check if there’s a target following the action
-//                if (i + 1 < tokens.length) {
-//                    String target = tokens[i + 1];
-//                    Log.d("ExecuteCommand", "Action: " + action + ", Target: " + target);
-//
-//                    // Execute the "open" action for recognized targets
-//                    if (action.equals("open") && actionMap.containsKey(target)) {
-//                        Log.d("ExecuteCommand", "Executing 'open' for: " + target);
-//                        openApp(target); // Execute the open command for the target
-//                        i++; // Skip to the next action after the target
-//                    } else {
-//                        Log.d("ExecuteCommand", "Unrecognized target for action: " + action);
-//                    }
-//                } else {
-//                    Log.d("ExecuteCommand", "No target found for action: " + action);
-//                }
-//            } else {
-//                Log.d("ExecuteCommand", "Token not recognized as action: " + action);
-//            }
-//        }
-//    }
-// end
-
 
 
     public void getScrollableNode(AccessibilityNodeInfo currentNode) {
@@ -1045,7 +1049,8 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         wm = (WindowManager) getSystemService(WINDOW_SERVICE);
 
         // add new
-//        setupCommandMappings(); // Ensure mappings are set up when service connects
+        loadAppNames();
+        setupCommandMappings(); // Ensure mappings are set up when service connects
         //end
         Date date = new Date();
         currentTime = date.getTime();
@@ -1055,23 +1060,13 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         loadAPIConnection();
         getDisplayMetrics();
         Log.d(debugLogTag, "Service Connected");
-        loadAppNames();
         //createText2VecModel();
 
-        //3rd version
-        // Add test command here for manual testing
-//        String testCommand = "open youtube";
-        String testCommand = "open youtube and search how to cook a steak";
-//        String testCommand = "open maps and search hi";
-//        String testCommand = "open youtube";
+        String testCommand = "open youtube and search salt and pepper";
+//        String testCommand = "open youtube and search hi and hello";
+
         executeCommand(testCommand); // This simulates the command input without using the microphone
 
-//        String testCommand2 = "search how to cook";
-//        executeCommand(testCommand2);
-
-//        openApp("com.google.android.youtube");
-//        openApp("youtube");
-        //end 3rdversion
 
         autoReloadHandler.post(runnable);
     }
@@ -1370,7 +1365,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
                 appMap.put(appName, packageInfo.packageName); // add new, replaced "this.appNames.add(appName); from original function"
 
                 // Log when an app is added to appMap
-                Log.d("AppMapLoad", "Added to map: " + appName + " -> " + packageInfo.packageName);
+//                Log.d("AppMapLoad", "Added to map: " + appName + " -> " + packageInfo.packageName);
 
             } catch (PackageManager.NameNotFoundException e) {
                 e.printStackTrace();                // handling app not found exception
