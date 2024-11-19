@@ -1665,4 +1665,18 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
             );
         }
     }
+
+    public static void playSpotify(Context context, String songName) {
+        String query = Uri.encode(songName);
+        Uri spotifyUri = Uri.parse("spotify:search:" + query);
+        Intent intent = new Intent(Intent.ACTION_VIEW, spotifyUri);
+        intent.setPackage("com.spotify.music");
+
+        try {
+            context.startActivity(intent);
+        }
+        catch (Exception e) {
+            Log.d("Spotify", "Spotify not installed");
+        }
+    }
 }
