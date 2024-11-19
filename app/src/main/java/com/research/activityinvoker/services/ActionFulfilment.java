@@ -72,6 +72,9 @@ import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.ops.transforms.Transforms;
 */
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -105,6 +108,9 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
     private HashMap<String, String> appMap = new HashMap<>(); // hash map for all apps, example of mapping: youtube -> com.google.android.youtube
     private HashMap<String, HashMap<String, String>> commandMap = new HashMap<>();
     // end
+
+    public HashMap<String, List<String>> storedCommands = new HashMap<>();
+    String filePath = "total.txt"; //Need to edit filePath once we figure out how to organize file
 
     ArrayList<String> outputArr = new ArrayList<>();
     ArrayList<AccessibilityNodeInfo> editableNodes = new ArrayList<>();
@@ -1260,6 +1266,32 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         Log.d("AppMapLoad", "Complete appMap: " + appMap.toString());
     }
     //end
+
+    public void loadCommands() {
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+
+                String[] parts = line.split("\\t"); // Split the line into parts when arrive at tab character
+                if (parts.length == 2) {
+                    String command = parts[0].trim();
+                    String actionsString = parts[1].trim();
+
+                    actionsString = actionsString.replaceAll("[()]", "").trim();
+                    String[] actions = actionsString.split(",");
+
+                    List<String> actionList = new ArrayList<>();
+                    for (String action : actions) {
+                        actionList.add(action.trim());
+                    }
+
+                    commandMap.put(command, (HashMap<String, String>) actionList);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
