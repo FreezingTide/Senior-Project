@@ -71,7 +71,7 @@ import android.os.Looper;
 import android.view.KeyEvent;
 import java.io.IOException;
 import android.net.Uri;
-
+import android.provider.MediaStore;
 
 //end
 
@@ -184,40 +184,61 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
                 return;
             }
 
-            String appName = tokens[0];
-            String packageName = appMap.get(appName);
+            StringBuilder appNameBuilder = new StringBuilder();
+            String packageName = null;
+            int appNameEndIndex = -1;
+
+            // Incrementally build the app name and check against appMap
+            for (int i = 0; i < tokens.length; i++) {
+                if (i > 0) {
+                    appNameBuilder.append(" ");
+                }
+                appNameBuilder.append(tokens[i]);
+
+                String potentialAppName = appNameBuilder.toString().toLowerCase();
+                packageName = appMap.get(potentialAppName);
+                if (packageName != null) {
+                    appNameEndIndex = i; // Record the last token of the app name
+                    break;
+                }
+            }
 
             if (packageName == null) {
-                Log.e("OpenCommand", "App not mapped in appMap: " + appName);
+                Log.e("OpenCommand", "App not mapped in appMap: " + appNameBuilder.toString());
                 return;
             }
 
             Intent intent = getPackageManager().getLaunchIntentForPackage(packageName);
             if (intent == null) {
-                Log.e("OpenCommand", "App not found for: " + appName);
+                Log.e("OpenCommand", "App not found for: " + appNameBuilder.toString());
                 return;
             }
 
             // Open the app
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
-            Log.d("OpenCommand", "Opened app: " + appName);
+            Log.d("OpenCommand", "Opened app: " + appNameBuilder.toString());
 
-            // Handle remaining tokens if present
-            if (tokens.length > 1) {
-                String[] remainingTokens = Arrays.copyOfRange(tokens, 1, tokens.length);
-                Log.d("OpenCommand", "Passing remaining tokens to subcommands: " + Arrays.toString(remainingTokens));
+            // Stop further processing if no additional tokens exist after the app name
+            if (appNameEndIndex == tokens.length - 1) {
+                Log.d("OpenCommand", "No additional tokens to process. Ending command.");
+                return;
+            }
 
-                HashMap<String, Object> appSubcommands = getSubcommandsForApp(appName);
-                if (appSubcommands != null) {
-                    traverseCommandMap(remainingTokens, appSubcommands, 0);
-                } else {
-                    Log.e("OpenCommand", "No subcommands for app: " + appName);
-                }
+            // Handle remaining tokens (subcommands) if present
+            String[] remainingTokens = Arrays.copyOfRange(tokens, appNameEndIndex + 1, tokens.length);
+            Log.d("OpenCommand", "Passing remaining tokens to subcommands: " + Arrays.toString(remainingTokens));
+
+            HashMap<String, Object> appSubcommands = getSubcommandsForApp(appNameBuilder.toString());
+            if (appSubcommands != null) {
+                traverseCommandMap(remainingTokens, appSubcommands, 0);
+            } else {
+                Log.e("OpenCommand", "No subcommands for app: " + appNameBuilder.toString());
             }
         }
 
-        // Helper method to get subcommands for an app - By Brennan
+
+
         private HashMap<String, Object> getSubcommandsForApp(String appName) {
             @SuppressWarnings("unchecked")
             HashMap<String, Object> openCommandMap = (HashMap<String, Object>) commandMap.get("open");
@@ -240,18 +261,12 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
                 return null;
             }
 
-            @SuppressWarnings("unchecked")
-            HashMap<String, Object> appSubcommands = (HashMap<String, Object>) appCommandMap.get("subcommands");
-            if (appSubcommands == null) {
-                Log.e("OpenCommand", "No subcommands for app: " + appName);
-            }
-
-            return appSubcommands;
+            return (HashMap<String, Object>) appCommandMap.get("subcommands");
         }
-
     }
 
-//    // Play youtube video -- by Hei
+
+    //    // Play youtube video -- by Hei
 //    // PlayCommand Implementation
     public class PlayCommand implements CommandHandler {
         private final String packageName;
@@ -330,7 +345,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         }
     }
 
-    // GoHomeCommand Implementation
+    // GoHomeCommand Implementation - Brennan
     public class GoHomeCommand implements CommandHandler {
         @Override
         public void executeCommand(String[] tokens) {
@@ -342,7 +357,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         }
     }
 
-    // GoBackCommand Implementation
+    // GoBackCommand Implementation - Brennan
     public class GoBackCommand implements CommandHandler {
         @Override
         public void executeCommand(String[] tokens) {
@@ -428,150 +443,712 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         }
     }
 
+    // TakePictureCommand Implementation - Brennan
+    public class TakePictureCommand implements CommandHandler {
+        @Override
+        public void executeCommand(String[] tokens) {
+            Log.d("TakePictureCommand", "Opening camera app and attempting to click the 'Take picture' button.");
 
+            // Get the camera app package name
+            String cameraPackage = appMap.get("camera");
+            if (cameraPackage == null) {
+                Log.e("TakePictureCommand", "Camera app not mapped in appMap.");
+                return;
+            }
 
-/* setupCommandMappings()
+            // Use the OpenCommand logic to open the camera app
+            Intent intent = getPackageManager().getLaunchIntentForPackage(cameraPackage);
+            if (intent == null) {
+                Log.e("TakePictureCommand", "Camera app not found for package: " + cameraPackage);
+                return;
+            }
+
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                startActivity(intent);
+                Log.d("TakePictureCommand", "Camera app opened.");
+
+                // Wait for a short delay to ensure the app is fully opened
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    // Use accessibility service to find and click the button
+                    clickTakePictureButton();
+                }, 2000); // Adjust delay based on device/app load time
+
+            } catch (Exception e) {
+                Log.e("TakePictureCommand", "Failed to open camera app.", e);
+            }
+        }
+
+        private void clickTakePictureButton() {
+            AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                Log.e("TakePictureCommand", "Root node is null. Cannot find 'Take picture' button.");
+                return;
+            }
+
+            // Find the button using its contentDescription
+            List<AccessibilityNodeInfo> nodes = rootNode.findAccessibilityNodeInfosByText("Take picture");
+            for (AccessibilityNodeInfo node : nodes) {
+                if (node.isClickable() && "Take picture".equals(node.getContentDescription())) {
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    Log.d("TakePictureCommand", "Successfully clicked the 'Take picture' button.");
+                    return;
+                }
+            }
+
+            Log.e("TakePictureCommand", "Failed to find or click the 'Take picture' button.");
+        }
+    }
+
+    // ToggleCameraCommand Implementation - Brennan
+    public class ToggleCameraCommand implements CommandHandler {
+
+        @Override
+        public void executeCommand(String[] tokens) {
+            Log.d("ToggleCameraCommand", "Toggling between front and rear cameras.");
+
+            // Get the root node of the current screen
+            AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                Log.e("ToggleCameraCommand", "Root node is null. Cannot toggle camera.");
+                return;
+            }
+
+            // Search for both "Switch to front camera" and "Switch to rear camera" buttons
+            List<AccessibilityNodeInfo> frontCameraNodes = rootNode.findAccessibilityNodeInfosByText("Switch to front camera");
+            List<AccessibilityNodeInfo> rearCameraNodes = rootNode.findAccessibilityNodeInfosByText("Switch to rear camera");
+
+            try {
+                // If "Switch to front camera" is visible and clickable, click it
+                for (AccessibilityNodeInfo node : frontCameraNodes) {
+                    if (node.isClickable() && node.isVisibleToUser()) {
+                        node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                        Log.d("ToggleCameraCommand", "Switched to front camera.");
+                        return;
+                    }
+                }
+
+                // If "Switch to rear camera" is visible and clickable, click it
+                for (AccessibilityNodeInfo node : rearCameraNodes) {
+                    if (node.isClickable() && node.isVisibleToUser()) {
+                        node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                        Log.d("ToggleCameraCommand", "Switched to rear camera.");
+                        return;
+                    }
+                }
+
+                // If neither button is found, log an error
+                Log.e("ToggleCameraCommand", "No camera switch button found.");
+            } catch (Exception e) {
+                Log.e("ToggleCameraCommand", "Failed to toggle camera.", e);
+            }
+        }
+    }
+
+    // TakeSelfieCommand Implementation - Brennan
+    public class TakeSelfieCommand implements CommandHandler {
+
+        @Override
+        public void executeCommand(String[] tokens) {
+            Log.d("TakeSelfieCommand", "Executing TakeSelfieCommand: Ensuring front camera is active, then taking a picture.");
+
+            new Handler(Looper.getMainLooper()).post(() -> {
+                // Step 1: Open the camera
+                CommandHandler openCamera = new OpenCommand();
+                openCamera.executeCommand(new String[]{"camera"});
+
+                // Step 2: Add a delay to ensure the camera app has opened
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    // Step 3: Check camera state and switch if needed
+                    ensureFrontCamera(() -> {
+                        // Step 4: Add a delay after switching to the front camera
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                            // Step 5: Take a picture
+                            Log.d("TakeSelfieCommand", "Taking picture with front camera.");
+                            CommandHandler takePicture = new TakePictureCommand();
+                            takePicture.executeCommand(new String[]{});
+                        }, 500); // Shorter delay for better responsiveness
+                    });
+                }, 1000); // Delay for opening the camera
+            });
+        }
+
+        private void ensureFrontCamera(Runnable onComplete) {
+            Log.d("TakeSelfieCommand", "Checking if front camera is active.");
+
+            AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                Log.e("TakeSelfieCommand", "Root node is null. Cannot check camera state.");
+                if (onComplete != null) onComplete.run();
+                return;
+            }
+
+            // Find the "Switch to front camera" button to check if the rear camera is active
+            List<AccessibilityNodeInfo> frontCameraNodes = rootNode.findAccessibilityNodeInfosByText("Switch to front camera");
+
+            boolean isRearCameraActive = false;
+            for (AccessibilityNodeInfo node : frontCameraNodes) {
+                if (node.isVisibleToUser() && node.isClickable()) {
+                    isRearCameraActive = true; // Rear camera is active if the button to switch to the front camera is visible
+                    break;
+                }
+            }
+
+            if (isRearCameraActive) {
+                Log.d("TakeSelfieCommand", "Rear camera is active. Switching to front camera.");
+                CommandHandler toggleCamera = new ToggleCameraCommand();
+                toggleCamera.executeCommand(new String[]{});
+
+                // Add a delay before calling the completion callback
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    if (onComplete != null) onComplete.run();
+                }, 1500); // Allow time for the camera to switch
+            } else {
+                Log.d("TakeSelfieCommand", "Front camera is already active. Skipping camera flip.");
+                if (onComplete != null) onComplete.run();
+            }
+        }
+    }
+
+    // ViewVideoSearchCommand Implementation - Brennan
+    public class ViewVideoSearchCommand implements CommandHandler {
+        @Override
+        public void executeCommand(String[] tokens) {
+            Log.d("ViewVideoSearchCommand", "Attempting to open the 'Videos' page using intent.");
+
+            try {
+                // Create an intent with the provided action and component
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setComponent(new ComponentName(
+                        "com.cookware.worldcusinerecipes",
+                        "com.cookware.worldcusinerecipes.VideosActivity" // Target activity
+                ));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); // Ensure it opens as a new task
+
+                // Start the target activity
+                startActivity(intent);
+                Log.d("ViewVideoSearchCommand", "Successfully navigated to the 'Videos' page using intent.");
+            } catch (Exception e) {
+                Log.e("ViewVideoSearchCommand", "Failed to navigate to the 'Videos' page using intent.", e);
+            }
+        }
+
+    }
+
+    // ViewVideoSearchCommand Implementation - Brennan
+    public class ViewRecipeFavorites implements CommandHandler {
+        @Override
+        public void executeCommand(String[] tokens) {
+            Log.d("ViewRecipeFavorites", "Attempting to open the 'Favorite Recipes' page using intent.");
+
+            try {
+                // Create an intent with the provided action and component
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setComponent(new ComponentName(
+                        "com.cookware.worldcusinerecipes",
+                        "com.cookware.worldcusinerecipes.FavoritesActivity" // Target activity
+                ));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); // Ensure it opens as a new task
+
+                // Start the target activity
+                startActivity(intent);
+                Log.d("ViewRecipeFavorites", "Successfully navigated to the 'Favorites' page using intent.");
+            } catch (Exception e) {
+                Log.e("ViewRecipeFavorites", "Failed to navigate to the 'Favorites' page using intent.", e);
+            }
+        }
+    }
+
+    // ViewVideosBookmarked Implementation - Brennan
+    public class ViewVideosBookmarked implements CommandHandler {
+        @Override
+        public void executeCommand(String[] tokens) {
+            Log.d("ViewVideosBookmarked", "Attempting to open the 'Videos Bookmarked' page using intent.");
+
+            try {
+                // Create an intent with the provided action and component
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setComponent(new ComponentName(
+                        "com.cookware.worldcusinerecipes",
+                        "com.cookware.worldcusinerecipes.VideosBookmarkedActivity" // Target activity
+                ));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); // Ensure it opens as a new task
+
+                // Start the target activity
+                startActivity(intent);
+                Log.d("ViewVideosBookmarked", "Successfully navigated to the 'Videos Bookmarked' page using intent.");
+            } catch (Exception e) {
+                Log.e("ViewVideosBookmarked", "Failed to navigate to the 'Videos Bookmarked' page using intent.", e);
+            }
+        }
+    }
+
+    // ViewVideosBookmarked Implementation - Brennan
+    public class ViewUserProfile implements CommandHandler {
+        @Override
+        public void executeCommand(String[] tokens) {
+            Log.d("ViewUserProfile", "Attempting to open the 'User Profile' page using intent.");
+
+            try {
+                // Create an intent with the provided action and component
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setComponent(new ComponentName(
+                        "com.cookware.worldcusinerecipes",
+                        "com.cookware.worldcusinerecipes.UserProfileActivity" // Target activity
+                ));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); // Ensure it opens as a new task
+
+                // Start the target activity
+                startActivity(intent);
+                Log.d("ViewUserProfile", "Successfully navigated to the 'User Profile' page using intent.");
+            } catch (Exception e) {
+                Log.e("ViewUserProfile", "Failed to navigate to the 'User Profile' page using intent.", e);
+            }
+        }
+    }
+
+    // ViewRecipeStore Implementation - Brennan
+    public class ViewRecipeStore implements CommandHandler {
+        @Override
+        public void executeCommand(String[] tokens) {
+            Log.d("ViewRecipeStore", "Attempting to open the 'Recipe Store' page using intent.");
+
+            try {
+                // Create an intent with the provided action and component
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setComponent(new ComponentName(
+                        "com.cookware.worldcusinerecipes",
+                        "com.cookware.worldcusinerecipes.RecipeStoreActivity" // Target activity
+                ));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); // Ensure it opens as a new task
+
+                // Start the target activity
+                startActivity(intent);
+                Log.d("ViewRecipeStore", "Successfully navigated to the 'Recipe Store' page using intent.");
+            } catch (Exception e) {
+                Log.e("ViewRecipeStore", "Failed to navigate to the 'Recipe Store' page using intent.", e);
+            }
+        }
+    }
+
+/* setupCommandMappings() - Brennan
 commandMap
-└── "open" → openCommandMap
-    ├── "action" → OpenCommand
-    └── "subcommands" → openSubcommands
-        ├── "youtube" → youtubeCommandMap
-        │   ├── "action" → null (no direct action for "youtube")
-        │   └── "subcommands" → youtubeSubcommands
-        │       └── "search" → youtubeSearchCommandMap
-        │           └── "action" → SearchCommand("com.google.android.youtube", "youtube")
-        └── "maps" → mapsCommandMap
-            ├── "action" → null (no direct action for "maps")
-            └── "subcommands" → mapsSubcommands
-                └── "search" → mapsSearchCommandMap
-                    └── "action" → SearchCommand("com.google.android.apps.maps", "maps")
+├── "open" → openCommandMap
+│   ├── "action" → OpenCommand
+│   └── "subcommands" → openSubcommands
+│       ├── "youtube" → youtubeCommandMap
+│       │   ├── "action" → null (no direct action for "youtube")
+│       │   └── "subcommands" → youtubeSubcommands
+│       │       ├── "search" → youtubeSearchCommandMap
+│       │       │   └── "action" → SearchCommand("com.google.android.youtube", "youtube")
+│       │       └── "play" → youtubePlayCommandMap
+│       │           └── "action" → PlayCommand("com.google.android.youtube")
+│       ├── "maps" → mapsCommandMap
+│       │   ├── "action" → null (no direct action for "maps")
+│       │   └── "subcommands" → mapsSubcommands
+│       │       ├── "search" → mapsSearchCommandMap
+│       │       │   └── "action" → SearchCommand("com.google.android.apps.maps", "maps")
+│       │       └── "route" → mapsRouteCommandMap
+│       │           └── "action" → RouteCommand
+│       └── "camera" → cameraCommandMap
+│           ├── "action" → null (no direct action for "camera")
+│           └── "subcommands" → cameraSubcommands
+│               ├── "take" → takePictureCommandMap
+│               │   └── "action" → TakePictureCommand
+│               └── "flip" → toggleCameraCommandMap
+│                   └── "action" → ToggleCameraCommand
+├── "home" → goHomeCommandMap
+│   └── "action" → GoHomeCommand
+├── "back" → goBackCommandMap
+│   └── "action" → GoBackCommand
+├── "scroll" → scrollCommandMap
+│   └── "action" → ScrollCommand
+├── "photo" → takePictureCommandMap
+│   └── "action" → TakePictureCommand
+├── "picture" → takePictureCommandMap
+│   └── "action" → TakePictureCommand
+├── "flip" → toggleCameraCommandMap
+│   └── "action" → ToggleCameraCommand
+├── "camera" → toggleCameraCommandMap
+│   └── "action" → ToggleCameraCommand
+└── "route" → routeCommandMap
+    └── "action" → RouteCommand
+
  */
 
-// Setup Command Mappings - By Brennan
+    // Setup Command Mappings - By Brennan
     private void setupCommandMappings() {
-        // Define the search command for YouTube
+        // === YouTube Commands ===
         HashMap<String, Object> youtubeSearchCommandMap = new HashMap<>();
         youtubeSearchCommandMap.put("action", new SearchCommand("com.google.android.youtube", "youtube"));
 
-//        // Define the play command for YouTube
-//        HashMap<String, Object> youtubePlayCommandMap = new HashMap<>();
-//        youtubePlayCommandMap.put("action", new PlayCommand("com.google.android.youtube"));
-
-        // Define the play command for YouTube
         HashMap<String, Object> youtubePlayCommandMap = new HashMap<>();
         youtubePlayCommandMap.put("action", new PlayCommand("com.google.android.youtube"));
 
+        HashMap<String, Object> youtubeCommandMap = new HashMap<>();
+        youtubeCommandMap.put("action", null);
+        youtubeCommandMap.put("subcommands", new HashMap<String, Object>() {{
+            put("search", youtubeSearchCommandMap);
+            put("play", youtubePlayCommandMap);
+        }});
 
+        commandMap.put("youtube", youtubeCommandMap);
 
-        // Define the search command for Maps
+        // === Maps Commands ===
         HashMap<String, Object> mapsSearchCommandMap = new HashMap<>();
         mapsSearchCommandMap.put("action", new SearchCommand("com.google.android.apps.maps", "maps"));
 
-        // Define the route command for Maps
         HashMap<String, Object> mapsRouteCommandMap = new HashMap<>();
         mapsRouteCommandMap.put("action", new RouteCommand());
 
-        // Define the "youtube" command
-        HashMap<String, Object> youtubeCommandMap = new HashMap<>();
-        youtubeCommandMap.put("action", null); // No direct action for "youtube"
-        youtubeCommandMap.put("subcommands", new HashMap<String, Object>() {{
-            put("search", youtubeSearchCommandMap); // Add "search" subcommand for YouTube
-            put("play", youtubePlayCommandMap);    // Add "play" subcommand for YouTube
-        }});
-
-        // Add to the top-level commands
-        commandMap.put("youtube", youtubeCommandMap); // Add "youtube" as a subcommand
-
-        // Define the "maps" command
         HashMap<String, Object> mapsCommandMap = new HashMap<>();
-        mapsCommandMap.put("action", null); // No direct action for "maps"
+        mapsCommandMap.put("action", null);
         mapsCommandMap.put("subcommands", new HashMap<String, Object>() {{
-            put("search", mapsSearchCommandMap); // Add "search" subcommand for Maps
-            put("route", mapsRouteCommandMap);  // Add "route" subcommand for Maps
+            put("search", mapsSearchCommandMap);
+            put("route", mapsRouteCommandMap);
         }});
 
-        // Define the "open" command
+        commandMap.put("maps", mapsCommandMap);
+
+        // === Camera Commands ===
+        HashMap<String, Object> takePictureCommandMap = new HashMap<>();
+        takePictureCommandMap.put("action", new TakePictureCommand());
+
+        HashMap<String, Object> toggleCameraCommandMap = new HashMap<>();
+        toggleCameraCommandMap.put("action", new ToggleCameraCommand());
+
+        HashMap<String, Object> takeSelfieCommandMap = new HashMap<>();
+        takeSelfieCommandMap.put("action", new TakeSelfieCommand());
+
+        HashMap<String, Object> cameraCommandMap = new HashMap<>();
+        cameraCommandMap.put("action", null);
+        cameraCommandMap.put("subcommands", new HashMap<String, Object>() {{
+            put("take", takePictureCommandMap);
+            put("flip", toggleCameraCommandMap);
+            put("selfie", takeSelfieCommandMap);
+        }});
+
+        commandMap.put("camera", cameraCommandMap);
+        commandMap.put("photo", takePictureCommandMap);
+        commandMap.put("picture", takePictureCommandMap);
+        commandMap.put("flip", toggleCameraCommandMap);
+        commandMap.put("selfie", takeSelfieCommandMap);
+
+        // === World Cuisines Commands ===
+        HashMap<String, Object> viewVideoSearchCommandMap = new HashMap<>();
+        viewVideoSearchCommandMap.put("action", new ViewVideoSearchCommand());
+
+        HashMap<String, Object> viewRecipeFavoritesCommandMap = new HashMap<>();
+        viewRecipeFavoritesCommandMap.put("action", new ViewRecipeFavorites());
+
+        HashMap<String, Object> viewVideosBookmarkedCommandMap = new HashMap<>();
+        viewVideosBookmarkedCommandMap.put("action", new ViewVideosBookmarked());
+
+        HashMap<String, Object> viewUserProfileCommandMap = new HashMap<>();
+        viewUserProfileCommandMap.put("action", new ViewUserProfile());
+
+        HashMap<String, Object> viewRecipeStoreCommandMap = new HashMap<>();
+        viewRecipeStoreCommandMap.put("action", new ViewRecipeStore());
+
+        HashMap<String, Object> worldCuisinesCommandMap = new HashMap<>();
+        worldCuisinesCommandMap.put("action", null);
+        worldCuisinesCommandMap.put("subcommands", new HashMap<String, Object>() {{
+            put("go to view video search", viewVideoSearchCommandMap);
+            put("show me view favorite detail", viewRecipeFavoritesCommandMap);
+            put("show me view videos bookmarked", viewVideosBookmarkedCommandMap);
+            put("show me view user profile", viewUserProfileCommandMap);
+            put("show me view recipe store", viewRecipeStoreCommandMap);
+        }});
+
+        // === Open Commands ===
         HashMap<String, Object> openCommandMap = new HashMap<>();
         openCommandMap.put("action", new OpenCommand());
         openCommandMap.put("subcommands", new HashMap<String, Object>() {{
-            put("youtube", youtubeCommandMap); // Add "youtube" as a subcommand
-            put("maps", mapsCommandMap); // Add "maps" as a subcommand
+            put("youtube", youtubeCommandMap);
+            put("maps", mapsCommandMap);
+            put("camera", cameraCommandMap);
+            put("world cuisines", worldCuisinesCommandMap);
         }});
 
-        // Add "go home" command
+        commandMap.put("open", openCommandMap);
+
+        // === Navigation Commands ===
         HashMap<String, Object> goHomeCommandMap = new HashMap<>();
         goHomeCommandMap.put("action", new GoHomeCommand());
+        commandMap.put("home", goHomeCommandMap);
 
-        // Add "go back" command
         HashMap<String, Object> goBackCommandMap = new HashMap<>();
         goBackCommandMap.put("action", new GoBackCommand());
+        commandMap.put("back", goBackCommandMap);
 
-        // Add top-level commands to the main command map
-        commandMap.put("open", openCommandMap);
-        commandMap.put("home", goHomeCommandMap); // Add "home" command
-        commandMap.put("back", goBackCommandMap); // Add "back" command
-
-        // Add scroll commands
+        // === Scroll Commands ===
         HashMap<String, Object> scrollCommandMap = new HashMap<>();
         scrollCommandMap.put("action", new ScrollCommand());
+        commandMap.put("scroll", scrollCommandMap);
 
-        commandMap.put("scroll", scrollCommandMap); // Add "scroll" command to the top level
-
-        // Add "route" command for navigation
+        // === Route Commands ===
         HashMap<String, Object> routeCommandMap = new HashMap<>();
         routeCommandMap.put("action", new RouteCommand());
-
-        // Add the "route" command to the top-level command map
         commandMap.put("route", routeCommandMap);
-
 
         // Log the command map structure
         Log.d("setupCommandMappings", "Command map structure: " + new Gson().toJson(commandMap));
     }
 
-
-// Traverse Command Map - By Brennan
+    // Traverse Command Map - By Brennan
     private void traverseCommandMap(String[] tokens, HashMap<String, Object> currentMap, int index) {
         if (index >= tokens.length) {
             Log.d("CommandExecution", "All tokens processed.");
             return;
         }
 
-        String currentToken = tokens[index];
-        if (!currentMap.containsKey(currentToken)) {
-            // Log and skip unrecognized token
-            Log.w("CommandExecution", "Skipping unrecognized token: " + currentToken);
-            traverseCommandMap(tokens, currentMap, index + 1); // Move to the next token
+        // Attempt to match multi-word keys by building phrases from remaining tokens
+        StringBuilder phraseBuilder = new StringBuilder();
+        int phraseEndIndex = -1;
+
+        for (int i = index; i < tokens.length; i++) {
+            if (i > index) phraseBuilder.append(" "); // Add a space between words
+            phraseBuilder.append(tokens[i]);
+            String phrase = phraseBuilder.toString();
+
+            if (currentMap.containsKey(phrase)) {
+                phraseEndIndex = i;
+                break; // Stop searching once the longest matching phrase is found
+            }
+        }
+
+        if (phraseEndIndex != -1) {
+            // Found a matching phrase
+            String matchingPhrase = phraseBuilder.toString();
+            @SuppressWarnings("unchecked")
+            HashMap<String, Object> entry = (HashMap<String, Object>) currentMap.get(matchingPhrase);
+
+            // Execute associated action if it exists
+            CommandHandler action = (CommandHandler) entry.get("action");
+            if (action != null) {
+                String[] remainingTokens = Arrays.copyOfRange(tokens, phraseEndIndex + 1, tokens.length);
+                Log.d("CommandExecution", "Executing action for phrase: " + matchingPhrase);
+                action.executeCommand(remainingTokens);
+                return; // Stop further processing after executing the action
+            }
+
+            // Traverse subcommands if they exist
+            @SuppressWarnings("unchecked")
+            HashMap<String, Object> subcommands = (HashMap<String, Object>) entry.get("subcommands");
+            if (subcommands != null) {
+                Log.d("CommandExecution", "Traversing subcommands for phrase: " + matchingPhrase);
+                traverseCommandMap(tokens, subcommands, phraseEndIndex + 1);
+            } else {
+                Log.e("CommandExecution", "No subcommands for phrase: " + matchingPhrase);
+            }
             return;
         }
 
-        @SuppressWarnings("unchecked")
-        HashMap<String, Object> entry = (HashMap<String, Object>) currentMap.get(currentToken);
-
-        CommandHandler action = (CommandHandler) entry.get("action");
-        if (action != null) {
-            String[] remainingTokens = Arrays.copyOfRange(tokens, index + 1, tokens.length);
-            Log.d("CommandExecution", "Executing action for token: " + currentToken);
-            action.executeCommand(remainingTokens);
-            return; // Stop further processing after executing the action
-        }
-
-        @SuppressWarnings("unchecked")
-        HashMap<String, Object> subcommands = (HashMap<String, Object>) entry.get("subcommands");
-        if (subcommands != null) {
-            Log.d("CommandExecution", "Traversing subcommands for token: " + currentToken);
-            traverseCommandMap(tokens, subcommands, index + 1);
-        } else {
-            Log.e("CommandExecution", "No subcommands for token: " + currentToken);
-        }
+        // If no matching phrase is found, log and skip the current token
+        Log.w("CommandExecution", "Skipping unrecognized token: " + tokens[index]);
+        traverseCommandMap(tokens, currentMap, index + 1);
     }
 
     // Execute Command - By Brennan
     private void executeCommand(String sentence) {
+        // Split the input sentence into lowercase tokens for consistent processing.
+        // "open youtube and search hi" -> tokens ["open", "youtube", "and", "search", "hi"].
         String[] tokens = sentence.toLowerCase().trim().split(" ");
+
+        // Start traversing the command map from the root.
         traverseCommandMap(tokens, commandMap, 0);
     }
 
+
+
+
+//// Setup Command Mappings - By Brennan
+//    private void setupCommandMappings() {
+//        // Define the search command for YouTube
+//        HashMap<String, Object> youtubeSearchCommandMap = new HashMap<>();
+//        youtubeSearchCommandMap.put("action", new SearchCommand("com.google.android.youtube", "youtube"));
+//
+////        // Define the play command for YouTube
+////        HashMap<String, Object> youtubePlayCommandMap = new HashMap<>();
+////        youtubePlayCommandMap.put("action", new PlayCommand("com.google.android.youtube"));
+//
+//        // Define the play command for YouTube
+//        HashMap<String, Object> youtubePlayCommandMap = new HashMap<>();
+//        youtubePlayCommandMap.put("action", new PlayCommand("com.google.android.youtube"));
+//
+//        // Define the search command for Maps
+//        HashMap<String, Object> mapsSearchCommandMap = new HashMap<>();
+//        mapsSearchCommandMap.put("action", new SearchCommand("com.google.android.apps.maps", "maps"));
+//
+//        // Define the route command for Maps
+//        HashMap<String, Object> mapsRouteCommandMap = new HashMap<>();
+//        mapsRouteCommandMap.put("action", new RouteCommand());
+//
+//        // Define the "camera" subcommand map with its own actions for Open commands
+//        HashMap<String, Object> cameraCommandMap = new HashMap<>();
+//        cameraCommandMap.put("action", null); // No direct action for "camera"
+//        cameraCommandMap.put("subcommands", new HashMap<String, Object>() {{
+//            put("take", new HashMap<String, Object>() {{ // Add "take picture" as a subcommand
+//                put("action", new TakePictureCommand());
+//            }});
+//            put("flip", new HashMap<String, Object>() {{ // Add "flip" as a subcommand
+//                put("action", new ToggleCameraCommand());
+//            }});
+//        }});
+//
+//        // Define the take picture command
+//        HashMap<String, Object> takePictureCommandMap = new HashMap<>();
+//        takePictureCommandMap.put("action", new TakePictureCommand());
+//
+//        // Add the toggle camera command
+//        HashMap<String, Object> toggleCameraCommandMap = new HashMap<>();
+//        toggleCameraCommandMap.put("action", new ToggleCameraCommand());
+//
+//        // Add the take selfie command
+//        HashMap<String, Object> takeSelfieCommandMap = new HashMap<>();
+//        takeSelfieCommandMap.put("action", new TakeSelfieCommand());
+//
+//        // Define the "youtube" command
+//        HashMap<String, Object> youtubeCommandMap = new HashMap<>();
+//        youtubeCommandMap.put("action", null); // No direct action for "youtube"
+//        youtubeCommandMap.put("subcommands", new HashMap<String, Object>() {{
+//            put("search", youtubeSearchCommandMap); // Add "search" subcommand for YouTube
+//            put("play", youtubePlayCommandMap);    // Add "play" subcommand for YouTube
+//        }});
+//
+//        // Add to the top-level commands
+//        commandMap.put("youtube", youtubeCommandMap); // Add "youtube" as a subcommand
+//
+//        // Define the "maps" command
+//        HashMap<String, Object> mapsCommandMap = new HashMap<>();
+//        mapsCommandMap.put("action", null); // No direct action for "maps"
+//        mapsCommandMap.put("subcommands", new HashMap<String, Object>() {{
+//            put("search", mapsSearchCommandMap); // Add "search" subcommand for Maps
+//            put("route", mapsRouteCommandMap);  // Add "route" subcommand for Maps
+//        }});
+//
+//        // Add the "take picture" command to the top-level command map
+//        commandMap.put("photo", takePictureCommandMap);
+//        commandMap.put("picture", takePictureCommandMap);
+//
+//        // Add the "flip camera" command to the top-level command map
+//        commandMap.put("flip", toggleCameraCommandMap);
+//        commandMap.put("camera", toggleCameraCommandMap);
+//
+//        // Add "selfie" as a top-level command
+//        commandMap.put("selfie", takeSelfieCommandMap);
+//        commandMap.put("take selfie", takeSelfieCommandMap);
+//
+//        cameraCommandMap.put("subcommands", new HashMap<String, Object>() {{
+//            put("take", takePictureCommandMap); // Existing "take picture" command
+//            put("flip", toggleCameraCommandMap); // Existing "flip camera" command
+//            put("selfie", takeSelfieCommandMap); // Add "selfie" subcommand
+//        }});
+//
+//        // Define the "open" command
+//        HashMap<String, Object> openCommandMap = new HashMap<>();
+//        openCommandMap.put("action", new OpenCommand());
+//        openCommandMap.put("subcommands", new HashMap<String, Object>() {{
+//            put("youtube", youtubeCommandMap); // Add "youtube" as a subcommand
+//            put("maps", mapsCommandMap); // Add "maps" as a subcommand
+//            put("camera", cameraCommandMap);  // Add the Camera subcommand here
+//        }});
+//
+//        // Add "go home" command
+//        HashMap<String, Object> goHomeCommandMap = new HashMap<>();
+//        goHomeCommandMap.put("action", new GoHomeCommand());
+//
+//        // Add "go back" command
+//        HashMap<String, Object> goBackCommandMap = new HashMap<>();
+//        goBackCommandMap.put("action", new GoBackCommand());
+//
+//        // Add top-level commands to the main command map
+//        commandMap.put("open", openCommandMap);
+//        commandMap.put("home", goHomeCommandMap); // Add "home" command
+//        commandMap.put("back", goBackCommandMap); // Add "back" command
+//
+//        // Add scroll commands
+//        HashMap<String, Object> scrollCommandMap = new HashMap<>();
+//        scrollCommandMap.put("action", new ScrollCommand());
+//
+//        commandMap.put("scroll", scrollCommandMap); // Add "scroll" command to the top level
+//
+//        // Add "route" command for navigation
+//        HashMap<String, Object> routeCommandMap = new HashMap<>();
+//        routeCommandMap.put("action", new RouteCommand());
+//
+//        // Add the "route" command to the top-level command map
+//        commandMap.put("route", routeCommandMap);
+//
+//
+//        // Log the command map structure
+//        Log.d("setupCommandMappings", "Command map structure: " + new Gson().toJson(commandMap));
+//    }
+
+
+// Traverse Command Map - By Brennan
+
+//    private void traverseCommandMap(String[] tokens, HashMap<String, Object> currentMap, int index) {
+//        if (index >= tokens.length) {
+//            Log.d("CommandExecution", "All tokens processed.");
+//            return;
+//        }
+//
+//        // Get the current token (e.g., the word at the current index in the command).
+//        String currentToken = tokens[index];
+//
+//        // Check if the current token exists in the current map.
+//        if (!currentMap.containsKey(currentToken)) {
+//            // Log and skip unrecognized token
+//            Log.w("CommandExecution", "Skipping unrecognized token: " + currentToken);
+//
+//            // Move to the next token by incrementing the index.
+//            traverseCommandMap(tokens, currentMap, index + 1); // Move to the next token
+//            return;
+//        }
+//
+//        // Retrieve the entry for the current token from the map.
+//        @SuppressWarnings("unchecked")
+//        HashMap<String, Object> entry = (HashMap<String, Object>) currentMap.get(currentToken);
+//
+//        // Check if the entry has an associated "action".
+//        CommandHandler action = (CommandHandler) entry.get("action");
+//        if (action != null) {
+//            // If an action exists, execute it with the remaining tokens.
+//            // Example: If the token is "search" in "open youtube and search hi",
+//            // the remaining tokens ["hi"] will be passed to the SearchCommand.
+//
+//            String[] remainingTokens = Arrays.copyOfRange(tokens, index + 1, tokens.length);
+//            Log.d("CommandExecution", "Executing action for token: " + currentToken);
+//            action.executeCommand(remainingTokens);
+//            return; // Stop further processing after executing the action
+//        }
+//
+//        // If no "action" exists, check for "subcommands".
+//        @SuppressWarnings("unchecked")
+//        HashMap<String, Object> subcommands = (HashMap<String, Object>) entry.get("subcommands");
+//
+//        // if "subcommands" exist call traverseCommandMap with the subcommands and index
+//        if (subcommands != null) {
+//            // If subcommands exist, recursively call traverseCommandMap with the subcommands map.
+//            // Example: If the token is "youtube" in "open youtube and search hi",
+//            // traverse into the subcommands for "youtube" (e.g., "search", "play").
+//            Log.d("CommandExecution", "Traversing subcommands for token: " + currentToken);
+//            traverseCommandMap(tokens, subcommands, index + 1);
+//        } else {
+//            Log.e("CommandExecution", "No subcommands for token: " + currentToken);
+//        }
+//    }
+
+//    // Execute Command - By Brennan
+//    private void executeCommand(String sentence) {
+//        // Split the input sentence into lowercase tokens for consistent processing.
+//        // "open youtube and search hi" -> tokens ["open", "youtube", "and", "search", "hi"].
+//        String[] tokens = sentence.toLowerCase().trim().split(" ");
+//
+//        // Start traversing the command map from the root.
+//        traverseCommandMap(tokens, commandMap, 0);
+//    }
 
     // v8 end
 
@@ -585,7 +1162,7 @@ commandMap
 
         // basic checks for null safety
         AccessibilityNodeInfo source = event.getSource();
-//        Log.d("dddd", event.getEventType() + "  " + event.getSource());
+        Log.d("dddd", event.getEventType() + "  " + event.getSource());
 //        if (source == null && event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
 //            return;
 //        }
@@ -635,8 +1212,45 @@ commandMap
             Log.d("test", uiElements.toString());
             this.executeCommand("");
         }
+
+        // add enw
+        // Process the current UI hierarchy
+        AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+        if (rootNode != null) {
+            Log.d("AccessibilityEvent", "Root node is available. Printing clickable nodes...");
+
+            // Traverse and log all clickable components
+            logClickableComponents(rootNode);
+        } else {
+            Log.e("AccessibilityEvent", "Root node is null. Cannot traverse.");
+        }
+        //end
     }
     // ****** end
+
+    // add new
+    private void logClickableComponents(AccessibilityNodeInfo node) {
+        if (node == null) return;
+
+        // Check if the node is clickable and visible
+        if (node.isClickable() && node.isVisibleToUser()) {
+            Rect bounds = new Rect();
+            node.getBoundsInScreen(bounds);
+
+            Log.d("ClickableNode",
+                    "Text: " + node.getText() +
+                            ", Content Description: " + node.getContentDescription() +
+                            ", View ID: " + node.getViewIdResourceName() +
+                            ", Bounds: " + bounds +
+                            ", Class Name: " + node.getClassName());
+        }
+
+        // Recursively log children nodes
+        for (int i = 0; i < node.getChildCount(); i++) {
+            logClickableComponents(node.getChild(i));
+        }
+    }
+    // end
 
     public void checkSettingsChanged() {
         sharedPreferences = getSharedPreferences(FILE_NAME, 0);
@@ -704,11 +1318,14 @@ commandMap
             if (rectTest.right - 100 < width && rectTest.bottom - 100 < height && rectTest.left + 100 > 0 && rectTest.top + 100 > 0) {
                 if (nodeInfo.getText() != null) {   // check if node has a corresponding text
                     label += nodeInfo.getText();
+                    Log.d(debugLogTag, "Clickable Element: " + label);
                     uiElements.add(label.toLowerCase());
                     return;
                 } else {
                     // no information about node or event (Tags to be assigned!)
                     String foundLabel = searchForTextView(nodeInfo, "");
+                    Log.d(debugLogTag, "Clickable Element with no text, found label: " + foundLabel);
+
                     String[] texts = foundLabel.split(" ");
                     int end = texts.length;
                     Set<String> cleanTexts = new HashSet<String>();
@@ -763,6 +1380,7 @@ commandMap
 
         return result;
     }
+
 
     private void inflateTooltip(int x, int y, AccessibilityNodeInfo nodeInfo) {
         /**
@@ -1270,7 +1888,13 @@ commandMap
         Log.d(debugLogTag, "Service Connected");
         //createText2VecModel();
 
-        String testCommand = "please route to a dessert shop near me";
+//        String testCommand = "open world cuisines go to VIEW Video Search";
+//        String testCommand = "open world cuisines show me View favorite detail";
+//        String testCommand = "open world cuisines show me VIEW Videos Bookmarked";
+//        String testCommand = "open world cuisines show me view user profile";
+        String testCommand = "open world cuisines show me view recipe store";
+
+
 //        String testCommand = "open youtube and search hi and hello";
 
         executeCommand(testCommand); // This simulates the command input without using the microphone
