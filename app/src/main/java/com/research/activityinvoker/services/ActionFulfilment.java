@@ -371,34 +371,86 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         }
     }
 
-    // ScrollCommand Implementation
-    public class ScrollCommand implements CommandHandler {
+    // ScrollSwipeCommand Implementation - By Brennan
+    public class ScrollSwipeCommand implements CommandHandler {
+        private final AccessibilityService accessibilityService;
+
+        public ScrollSwipeCommand(AccessibilityService service) {
+            this.accessibilityService = service; // Pass the AccessibilityService instance
+        }
 
         @Override
         public void executeCommand(String[] tokens) {
             if (tokens.length == 0) {
-                Log.e("ScrollCommand", "No direction specified.");
+                Log.e("ScrollSwipeCommand", "No direction specified.");
                 return;
             }
 
             String direction = tokens[0].toLowerCase();
-            int distance = tokens.length > 1 ? Integer.parseInt(tokens[1]) : 100; // Default distance
+            Log.d("ScrollSwipeCommand", "Received scroll/swipe command: " + direction);
 
-            if (direction.equals("up")) {
-                performScroll(-distance);
-            } else if (direction.equals("down")) {
-                performScroll(distance);
-            } else {
-                Log.e("ScrollCommand", "Invalid direction: " + direction);
+            switch (direction) {
+                case "left":
+                    performSwipeLeft();
+                    break;
+                case "right":
+                    performSwipeRight();
+                    break;
+                case "up":
+                    performSwipeUp();
+                    break;
+                case "down":
+                    performSwipeDown();
+                    break;
+                default:
+                    Log.e("ScrollSwipeCommand", "Unrecognized swipe direction: " + direction);
             }
         }
 
-        private void performScroll(int distance) {
-            // Simulate scrolling (requires AccessibilityService for full functionality)
-            Log.d("ScrollCommand", "Scrolling by distance: " + distance);
-            // Add implementation using AccessibilityService or gesture APIs.
+        private void performSwipeLeft() {
+            performSwipe(0.8f, 0.2f, 0.5f, 0.5f); // Swipe from right to left
+        }
+
+        private void performSwipeRight() {
+            performSwipe(0.2f, 0.8f, 0.5f, 0.5f); // Swipe from left to right
+        }
+
+        private void performSwipeUp() {
+            performSwipe(0.5f, 0.5f, 0.8f, 0.2f); // Swipe from bottom to top
+        }
+
+        private void performSwipeDown() {
+            performSwipe(0.5f, 0.5f, 0.2f, 0.8f); // Swipe from top to bottom
+        }
+
+        private void performSwipe(float startX, float endX, float startY, float endY) {
+            int screenWidth = accessibilityService.getResources().getDisplayMetrics().widthPixels;
+            int screenHeight = accessibilityService.getResources().getDisplayMetrics().heightPixels;
+
+            // Calculate absolute screen coordinates
+            float startXCoord = startX * screenWidth;
+            float endXCoord = endX * screenWidth;
+            float startYCoord = startY * screenHeight;
+            float endYCoord = endY * screenHeight;
+
+            // Create a Path for the swipe action
+            Path swipePath = new Path();
+            swipePath.moveTo(startXCoord, startYCoord); // Start point
+            swipePath.lineTo(endXCoord, endYCoord); // End point
+
+            // Create a gesture builder for swipe action
+            GestureDescription.StrokeDescription stroke = new GestureDescription.StrokeDescription(swipePath, 0, 300); // Duration in milliseconds
+            GestureDescription.Builder gestureBuilder = new GestureDescription.Builder();
+            gestureBuilder.addStroke(stroke);
+
+            // Dispatch the gesture
+            accessibilityService.dispatchGesture(gestureBuilder.build(), null, null);
+            Log.d("ScrollSwipeCommand", "Swipe performed: (" + startX + ", " + startY + ") to (" + endX + ", " + endY + ")");
         }
     }
+
+
+
 
     // RouteCommand Implementation - By Brennan
     public class RouteCommand implements CommandHandler {
@@ -882,9 +934,18 @@ commandMap
         commandMap.put("back", goBackCommandMap);
 
         // === Scroll Commands ===
-        HashMap<String, Object> scrollCommandMap = new HashMap<>();
-        scrollCommandMap.put("action", new ScrollCommand());
-        commandMap.put("scroll", scrollCommandMap);
+        // Combined Scroll/Swipe Command
+        ScrollSwipeCommand scrollSwipeCommand = new ScrollSwipeCommand(this); // Pass 'this' as AccessibilityService
+
+        // Add scroll and swipe commands to commandMap
+        commandMap.put("scroll", new HashMap<String, Object>() {{
+            put("action", scrollSwipeCommand);
+        }});
+
+        commandMap.put("swipe", new HashMap<String, Object>() {{
+            put("action", scrollSwipeCommand);
+        }});
+
 
         // === Route Commands ===
         HashMap<String, Object> routeCommandMap = new HashMap<>();
@@ -953,202 +1014,15 @@ commandMap
     private void executeCommand(String sentence) {
         // Split the input sentence into lowercase tokens for consistent processing.
         // "open youtube and search hi" -> tokens ["open", "youtube", "and", "search", "hi"].
+        long startedTime = System.currentTimeMillis(); // Start timing
         String[] tokens = sentence.toLowerCase().trim().split(" ");
-
         // Start traversing the command map from the root.
         traverseCommandMap(tokens, commandMap, 0);
+
+        long endedTime = System.currentTimeMillis(); // End timing
+        Log.d("CommandExecution", "Execution time speech '" + tokens + "': " + (endedTime - startedTime) + " ms");
+
     }
-
-
-
-
-//// Setup Command Mappings - By Brennan
-//    private void setupCommandMappings() {
-//        // Define the search command for YouTube
-//        HashMap<String, Object> youtubeSearchCommandMap = new HashMap<>();
-//        youtubeSearchCommandMap.put("action", new SearchCommand("com.google.android.youtube", "youtube"));
-//
-////        // Define the play command for YouTube
-////        HashMap<String, Object> youtubePlayCommandMap = new HashMap<>();
-////        youtubePlayCommandMap.put("action", new PlayCommand("com.google.android.youtube"));
-//
-//        // Define the play command for YouTube
-//        HashMap<String, Object> youtubePlayCommandMap = new HashMap<>();
-//        youtubePlayCommandMap.put("action", new PlayCommand("com.google.android.youtube"));
-//
-//        // Define the search command for Maps
-//        HashMap<String, Object> mapsSearchCommandMap = new HashMap<>();
-//        mapsSearchCommandMap.put("action", new SearchCommand("com.google.android.apps.maps", "maps"));
-//
-//        // Define the route command for Maps
-//        HashMap<String, Object> mapsRouteCommandMap = new HashMap<>();
-//        mapsRouteCommandMap.put("action", new RouteCommand());
-//
-//        // Define the "camera" subcommand map with its own actions for Open commands
-//        HashMap<String, Object> cameraCommandMap = new HashMap<>();
-//        cameraCommandMap.put("action", null); // No direct action for "camera"
-//        cameraCommandMap.put("subcommands", new HashMap<String, Object>() {{
-//            put("take", new HashMap<String, Object>() {{ // Add "take picture" as a subcommand
-//                put("action", new TakePictureCommand());
-//            }});
-//            put("flip", new HashMap<String, Object>() {{ // Add "flip" as a subcommand
-//                put("action", new ToggleCameraCommand());
-//            }});
-//        }});
-//
-//        // Define the take picture command
-//        HashMap<String, Object> takePictureCommandMap = new HashMap<>();
-//        takePictureCommandMap.put("action", new TakePictureCommand());
-//
-//        // Add the toggle camera command
-//        HashMap<String, Object> toggleCameraCommandMap = new HashMap<>();
-//        toggleCameraCommandMap.put("action", new ToggleCameraCommand());
-//
-//        // Add the take selfie command
-//        HashMap<String, Object> takeSelfieCommandMap = new HashMap<>();
-//        takeSelfieCommandMap.put("action", new TakeSelfieCommand());
-//
-//        // Define the "youtube" command
-//        HashMap<String, Object> youtubeCommandMap = new HashMap<>();
-//        youtubeCommandMap.put("action", null); // No direct action for "youtube"
-//        youtubeCommandMap.put("subcommands", new HashMap<String, Object>() {{
-//            put("search", youtubeSearchCommandMap); // Add "search" subcommand for YouTube
-//            put("play", youtubePlayCommandMap);    // Add "play" subcommand for YouTube
-//        }});
-//
-//        // Add to the top-level commands
-//        commandMap.put("youtube", youtubeCommandMap); // Add "youtube" as a subcommand
-//
-//        // Define the "maps" command
-//        HashMap<String, Object> mapsCommandMap = new HashMap<>();
-//        mapsCommandMap.put("action", null); // No direct action for "maps"
-//        mapsCommandMap.put("subcommands", new HashMap<String, Object>() {{
-//            put("search", mapsSearchCommandMap); // Add "search" subcommand for Maps
-//            put("route", mapsRouteCommandMap);  // Add "route" subcommand for Maps
-//        }});
-//
-//        // Add the "take picture" command to the top-level command map
-//        commandMap.put("photo", takePictureCommandMap);
-//        commandMap.put("picture", takePictureCommandMap);
-//
-//        // Add the "flip camera" command to the top-level command map
-//        commandMap.put("flip", toggleCameraCommandMap);
-//        commandMap.put("camera", toggleCameraCommandMap);
-//
-//        // Add "selfie" as a top-level command
-//        commandMap.put("selfie", takeSelfieCommandMap);
-//        commandMap.put("take selfie", takeSelfieCommandMap);
-//
-//        cameraCommandMap.put("subcommands", new HashMap<String, Object>() {{
-//            put("take", takePictureCommandMap); // Existing "take picture" command
-//            put("flip", toggleCameraCommandMap); // Existing "flip camera" command
-//            put("selfie", takeSelfieCommandMap); // Add "selfie" subcommand
-//        }});
-//
-//        // Define the "open" command
-//        HashMap<String, Object> openCommandMap = new HashMap<>();
-//        openCommandMap.put("action", new OpenCommand());
-//        openCommandMap.put("subcommands", new HashMap<String, Object>() {{
-//            put("youtube", youtubeCommandMap); // Add "youtube" as a subcommand
-//            put("maps", mapsCommandMap); // Add "maps" as a subcommand
-//            put("camera", cameraCommandMap);  // Add the Camera subcommand here
-//        }});
-//
-//        // Add "go home" command
-//        HashMap<String, Object> goHomeCommandMap = new HashMap<>();
-//        goHomeCommandMap.put("action", new GoHomeCommand());
-//
-//        // Add "go back" command
-//        HashMap<String, Object> goBackCommandMap = new HashMap<>();
-//        goBackCommandMap.put("action", new GoBackCommand());
-//
-//        // Add top-level commands to the main command map
-//        commandMap.put("open", openCommandMap);
-//        commandMap.put("home", goHomeCommandMap); // Add "home" command
-//        commandMap.put("back", goBackCommandMap); // Add "back" command
-//
-//        // Add scroll commands
-//        HashMap<String, Object> scrollCommandMap = new HashMap<>();
-//        scrollCommandMap.put("action", new ScrollCommand());
-//
-//        commandMap.put("scroll", scrollCommandMap); // Add "scroll" command to the top level
-//
-//        // Add "route" command for navigation
-//        HashMap<String, Object> routeCommandMap = new HashMap<>();
-//        routeCommandMap.put("action", new RouteCommand());
-//
-//        // Add the "route" command to the top-level command map
-//        commandMap.put("route", routeCommandMap);
-//
-//
-//        // Log the command map structure
-//        Log.d("setupCommandMappings", "Command map structure: " + new Gson().toJson(commandMap));
-//    }
-
-
-// Traverse Command Map - By Brennan
-
-//    private void traverseCommandMap(String[] tokens, HashMap<String, Object> currentMap, int index) {
-//        if (index >= tokens.length) {
-//            Log.d("CommandExecution", "All tokens processed.");
-//            return;
-//        }
-//
-//        // Get the current token (e.g., the word at the current index in the command).
-//        String currentToken = tokens[index];
-//
-//        // Check if the current token exists in the current map.
-//        if (!currentMap.containsKey(currentToken)) {
-//            // Log and skip unrecognized token
-//            Log.w("CommandExecution", "Skipping unrecognized token: " + currentToken);
-//
-//            // Move to the next token by incrementing the index.
-//            traverseCommandMap(tokens, currentMap, index + 1); // Move to the next token
-//            return;
-//        }
-//
-//        // Retrieve the entry for the current token from the map.
-//        @SuppressWarnings("unchecked")
-//        HashMap<String, Object> entry = (HashMap<String, Object>) currentMap.get(currentToken);
-//
-//        // Check if the entry has an associated "action".
-//        CommandHandler action = (CommandHandler) entry.get("action");
-//        if (action != null) {
-//            // If an action exists, execute it with the remaining tokens.
-//            // Example: If the token is "search" in "open youtube and search hi",
-//            // the remaining tokens ["hi"] will be passed to the SearchCommand.
-//
-//            String[] remainingTokens = Arrays.copyOfRange(tokens, index + 1, tokens.length);
-//            Log.d("CommandExecution", "Executing action for token: " + currentToken);
-//            action.executeCommand(remainingTokens);
-//            return; // Stop further processing after executing the action
-//        }
-//
-//        // If no "action" exists, check for "subcommands".
-//        @SuppressWarnings("unchecked")
-//        HashMap<String, Object> subcommands = (HashMap<String, Object>) entry.get("subcommands");
-//
-//        // if "subcommands" exist call traverseCommandMap with the subcommands and index
-//        if (subcommands != null) {
-//            // If subcommands exist, recursively call traverseCommandMap with the subcommands map.
-//            // Example: If the token is "youtube" in "open youtube and search hi",
-//            // traverse into the subcommands for "youtube" (e.g., "search", "play").
-//            Log.d("CommandExecution", "Traversing subcommands for token: " + currentToken);
-//            traverseCommandMap(tokens, subcommands, index + 1);
-//        } else {
-//            Log.e("CommandExecution", "No subcommands for token: " + currentToken);
-//        }
-//    }
-
-//    // Execute Command - By Brennan
-//    private void executeCommand(String sentence) {
-//        // Split the input sentence into lowercase tokens for consistent processing.
-//        // "open youtube and search hi" -> tokens ["open", "youtube", "and", "search", "hi"].
-//        String[] tokens = sentence.toLowerCase().trim().split(" ");
-//
-//        // Start traversing the command map from the root.
-//        traverseCommandMap(tokens, commandMap, 0);
-//    }
 
     // v8 end
 
@@ -1215,15 +1089,15 @@ commandMap
 
         // add enw
         // Process the current UI hierarchy
-        AccessibilityNodeInfo rootNode = getRootInActiveWindow();
-        if (rootNode != null) {
-            Log.d("AccessibilityEvent", "Root node is available. Printing clickable nodes...");
-
-            // Traverse and log all clickable components
-            logClickableComponents(rootNode);
-        } else {
-            Log.e("AccessibilityEvent", "Root node is null. Cannot traverse.");
-        }
+//        AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+//        if (rootNode != null) {
+//            Log.d("AccessibilityEvent", "Root node is available. Printing clickable nodes...");
+//
+//            // Traverse and log all clickable components
+//            logClickableComponents(rootNode);
+//        } else {
+//            Log.e("AccessibilityEvent", "Root node is null. Cannot traverse.");
+//        }
         //end
     }
     // ****** end
@@ -1502,7 +1376,11 @@ commandMap
                         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                         startActivity(intent);
                     } else {
+                        long startedTime = System.currentTimeMillis(); // Start timing
                         executeCommand(match);
+                        long endedTime = System.currentTimeMillis(); // End timing
+                        Log.d("CommandExecution", "Execution time using voice '" + "': " + (endedTime - startedTime) + " ms");
+
                     }
 
 
@@ -1888,17 +1766,18 @@ commandMap
         Log.d(debugLogTag, "Service Connected");
         //createText2VecModel();
 
+//        String testCommand = "open world cuisines show me VIEW Videos Bookmarked";
 //        String testCommand = "open world cuisines go to VIEW Video Search";
 //        String testCommand = "open world cuisines show me View favorite detail";
-//        String testCommand = "open world cuisines show me VIEW Videos Bookmarked";
 //        String testCommand = "open world cuisines show me view user profile";
-        String testCommand = "open world cuisines show me view recipe store";
+//        String testCommand = "open world cuisines show me view recipe store";
+        String testCommand = "scroll up";
+
 
 
 //        String testCommand = "open youtube and search hi and hello";
 
         executeCommand(testCommand); // This simulates the command input without using the microphone
-
 
         autoReloadHandler.post(runnable);
     }
