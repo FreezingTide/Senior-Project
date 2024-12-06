@@ -231,19 +231,77 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
                 return;
             }
 
-            // Handle remaining tokens (subcommands) if present
-            String[] remainingTokens = Arrays.copyOfRange(tokens, appNameEndIndex + 1, tokens.length);
-            Log.d("OpenCommand", "Passing remaining tokens to subcommands: " + Arrays.toString(remainingTokens));
+//            // Handle remaining tokens (subcommands) if present
+//            String[] remainingTokens = Arrays.copyOfRange(tokens, appNameEndIndex + 1, tokens.length);
+//            Log.d("OpenCommand", "Passing remaining tokens to subcommands: " + Arrays.toString(remainingTokens));
+//
+//            HashMap<String, Object> appSubcommands = getSubcommandsForApp(appNameBuilder.toString());
+//            if (appSubcommands != null) {
+//                traverseCommandMap(remainingTokens, appSubcommands, 0);
+//            } else {
+//                Log.e("OpenCommand", "No subcommands for app: " + appNameBuilder.toString());
+//            }
+//        }
 
-            HashMap<String, Object> appSubcommands = getSubcommandsForApp(appNameBuilder.toString());
-            if (appSubcommands != null) {
-                traverseCommandMap(remainingTokens, appSubcommands, 0);
+// Handle remaining tokens
+            // Define valid transition words
+            List<String> transitionWords = Arrays.asList("and", "go", "then", "so", "next", "after");
+
+            // Define delay duration in milliseconds
+            final long DELAY_BETWEEN_COMPLEX_COMMANDS_MS = 1000;
+
+            String[] remainingTokens = Arrays.copyOfRange(tokens, appNameEndIndex + 1, tokens.length);
+
+            if (remainingTokens.length > 0) {
+                int startIndex = 0;
+
+                // Skip all consecutive transition words
+                while (startIndex < remainingTokens.length && transitionWords.contains(remainingTokens[startIndex].toLowerCase())) {
+                    Log.d("OpenCommand", "Skipping transition word: '" + remainingTokens[startIndex] + "'");
+                    startIndex++;
+                }
+
+                // Ensure there are tokens left after skipping transition words
+                if (startIndex < remainingTokens.length) {
+                    // Check if the next token is a top-level command
+                    if (isTopLevelCommand(remainingTokens[startIndex])) {
+                        Log.d("OpenCommand", "Detected new top-level command after transition words.");
+
+                        // Create copies of effectively final variables for the lambda
+                        final String[] finalRemainingTokens = Arrays.copyOfRange(remainingTokens, startIndex, remainingTokens.length);
+
+                        // Introduce a small delay for complex commands
+                        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                            Log.d("OpenCommand", "Executing delayed traversal for top-level command.");
+                            traverseCommandMap(finalRemainingTokens, commandMap, 0);
+                        }, DELAY_BETWEEN_COMPLEX_COMMANDS_MS);
+
+                        return; // Stop further processing to allow the delayed execution
+                    } else {
+                        // Otherwise, process the remaining tokens as subcommands
+                        Log.d("OpenCommand", "Passing remaining tokens to subcommands: " + Arrays.toString(Arrays.copyOfRange(remainingTokens, startIndex, remainingTokens.length)));
+                        HashMap<String, Object> appSubcommands = getSubcommandsForApp(appNameBuilder.toString());
+                        if (appSubcommands != null) {
+                            traverseCommandMap(Arrays.copyOfRange(remainingTokens, startIndex, remainingTokens.length), appSubcommands, 0);
+                        } else {
+                            Log.e("OpenCommand", "No subcommands for app: " + appNameBuilder.toString());
+                        }
+                    }
+                } else {
+                    Log.d("OpenCommand", "No valid tokens to process after skipping transition words.");
+                }
             } else {
-                Log.e("OpenCommand", "No subcommands for app: " + appNameBuilder.toString());
+                Log.d("OpenCommand", "No remaining tokens to process.");
             }
+
+
+
         }
 
-
+        private boolean isTopLevelCommand(String token) {
+            // A token is a top-level command if it exists in the root commandMap
+            return commandMap.containsKey(token);
+        }
 
         private HashMap<String, Object> getSubcommandsForApp(String appName) {
             @SuppressWarnings("unchecked")
@@ -967,64 +1025,78 @@ commandMap
 
     // Traverse Command Map - By Brennan
     private void traverseCommandMap(String[] tokens, HashMap<String, Object> currentMap, int index) {
-        if (index >= tokens.length) {
-            Log.d("CommandExecution", "All tokens processed.");
-            return;
-        }
+        int topLevelCommandCount = 0; // Counter for top-level commands
 
-        // Attempt to match multi-word keys by building phrases from remaining tokens
-        StringBuilder phraseBuilder = new StringBuilder();
-        int phraseEndIndex = -1;
+        while (index < tokens.length) {
+            StringBuilder phraseBuilder = new StringBuilder();
+            int phraseEndIndex = -1;
 
-        for (int i = index; i < tokens.length; i++) {
-            if (i > index) phraseBuilder.append(" "); // Add a space between words
-            phraseBuilder.append(tokens[i]);
-            String phrase = phraseBuilder.toString();
+            // Attempt to match multi-word keys by building phrases from remaining tokens
+            for (int i = index; i < tokens.length; i++) {
+                if (i > index) phraseBuilder.append(" "); // Add a space between words
+                phraseBuilder.append(tokens[i]);
+                String phrase = phraseBuilder.toString();
 
-            if (currentMap.containsKey(phrase)) {
-                phraseEndIndex = i;
-                break; // Stop searching once the longest matching phrase is found
-            }
-        }
-
-        if (phraseEndIndex != -1) {
-            // Found a matching phrase
-            String matchingPhrase = phraseBuilder.toString();
-            @SuppressWarnings("unchecked")
-            HashMap<String, Object> entry = (HashMap<String, Object>) currentMap.get(matchingPhrase);
-
-            // Execute associated action if it exists
-            CommandHandler action = (CommandHandler) entry.get("action");
-            if (action != null) {
-                String[] remainingTokens = Arrays.copyOfRange(tokens, phraseEndIndex + 1, tokens.length);
-                Log.d("CommandExecution", "Executing action for phrase: " + matchingPhrase);
-                action.executeCommand(remainingTokens);
-                return; // Stop further processing after executing the action
+                if (currentMap.containsKey(phrase)) {
+                    phraseEndIndex = i;
+                    break; // Stop searching once the longest matching phrase is found
+                }
             }
 
-            // Traverse subcommands if they exist
-            @SuppressWarnings("unchecked")
-            HashMap<String, Object> subcommands = (HashMap<String, Object>) entry.get("subcommands");
-            if (subcommands != null) {
-                Log.d("CommandExecution", "Traversing subcommands for phrase: " + matchingPhrase);
-                traverseCommandMap(tokens, subcommands, phraseEndIndex + 1);
-            } else {
-                Log.e("CommandExecution", "No subcommands for phrase: " + matchingPhrase);
+            if (phraseEndIndex != -1) {
+                // Found a matching phrase
+                String matchingPhrase = phraseBuilder.toString();
+                @SuppressWarnings("unchecked")
+                HashMap<String, Object> entry = (HashMap<String, Object>) currentMap.get(matchingPhrase);
+
+                // Check if the matching phrase is a top-level command
+                if (currentMap == commandMap) {
+                    topLevelCommandCount++;
+                    if (topLevelCommandCount > 1) {
+                        Log.d("CommandExecution", "Multiple top-level commands detected. Restarting for new command.");
+                        traverseCommandMap(tokens, commandMap, phraseEndIndex); // Restart for the new top-level command
+                        return; // End the current traversal
+                    }
+                }
+
+                // Execute associated action if it exists
+                CommandHandler action = (CommandHandler) entry.get("action");
+                if (action != null) {
+                    String[] remainingTokens = Arrays.copyOfRange(tokens, phraseEndIndex + 1, tokens.length);
+                    Log.d("CommandExecution", "Executing action for phrase: " + matchingPhrase);
+                    action.executeCommand(remainingTokens);
+                    return; // Stop further processing after executing the action
+                }
+
+                // Traverse subcommands if they exist
+                @SuppressWarnings("unchecked")
+                HashMap<String, Object> subcommands = (HashMap<String, Object>) entry.get("subcommands");
+                if (subcommands != null) {
+                    Log.d("CommandExecution", "Traversing subcommands for phrase: " + matchingPhrase);
+                    index = phraseEndIndex + 1; // Move to the next token
+                    currentMap = subcommands; // Switch context to subcommands
+                    continue; // Restart traversal in the subcommand context
+                } else {
+                    Log.e("CommandExecution", "No subcommands for phrase: " + matchingPhrase);
+                }
             }
-            return;
+
+            // If no matching phrase is found, skip the current token
+            Log.w("CommandExecution", "Skipping unrecognized token: " + tokens[index]);
+            index++;
         }
 
-        // If no matching phrase is found, log and skip the current token
-        Log.w("CommandExecution", "Skipping unrecognized token: " + tokens[index]);
-        traverseCommandMap(tokens, currentMap, index + 1);
+        Log.d("CommandExecution", "All tokens processed.");
     }
 
     // Execute Command - By Brennan
     private void executeCommand(String sentence) {
-        // Split the input sentence into lowercase tokens for consistent processing.
-        // "open youtube and search hi" -> tokens ["open", "youtube", "and", "search", "hi"].
         long startedTime = System.currentTimeMillis(); // Start timing
+
+        // Split the input sentence into lowercase tokens for consistent processing
         String[] tokens = sentence.toLowerCase().trim().split(" ");
+        Log.d("CommandExecution", "Executing command: " + sentence);
+
         // Start traversing the command map from the root.
         traverseCommandMap(tokens, commandMap, 0);
 
@@ -1034,6 +1106,7 @@ commandMap
 //        Log.d("CommandExecution", "Parser Execution Time (using test command/simulate voice)'" + "': " + (endedTime - startedTime) + " ms");
 
     }
+
 
     // v10 end
 
@@ -1835,6 +1908,15 @@ commandMap
 
 
 //        String testCommand = "open youtube and search hi and hello";
+//        String testCommand = "open maps and search ice cream";
+//        String testCommand = "route to nearest burrito place";
+//        String testCommand = "open camera and take picture";
+
+//        String testCommand = "open maps and route to nearest icecream shop";
+//        String testCommand = "open youtube open chrome";
+//        String testCommand = "open youtube and go back";
+//        String testCommand = "open youtube and go home";
+
 
 //        executeCommand(testCommand); // This simulates the command input without using the microphone
 
