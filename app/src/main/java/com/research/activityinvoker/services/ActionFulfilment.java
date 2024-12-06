@@ -73,6 +73,9 @@ import java.io.IOException;
 import android.net.Uri;
 import android.provider.MediaStore;
 
+import android.media.MediaPlayer;
+
+
 //end
 
 @RequiresApi(api = Build.VERSION_CODES.R)
@@ -160,6 +163,9 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
     // Comment out
 //    public Word2Vec model;
 
+    // v11
+    private long speechStartTime; // Global variable to track the start time
+    //v11 end
 
     // v10 add new
 
@@ -363,6 +369,9 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
         public void executeCommand(String[] tokens) {
             Log.d("GoBackCommand", "Going back.");
             // Simulate a back button press
+
+            performGlobalAction(GLOBAL_ACTION_BACK);
+
             try {
                 Runtime.getRuntime().exec("input keyevent " + KeyEvent.KEYCODE_BACK);
             } catch (IOException e) {
@@ -1020,11 +1029,13 @@ commandMap
         traverseCommandMap(tokens, commandMap, 0);
 
         long endedTime = System.currentTimeMillis(); // End timing
-        Log.d("CommandExecution", "Execution time speech '" + tokens + "': " + (endedTime - startedTime) + " ms");
+
+        // Uncomment if test execution time using testcommand variable or using simulated voice commands
+//        Log.d("CommandExecution", "Parser Execution Time (using test command/simulate voice)'" + "': " + (endedTime - startedTime) + " ms");
 
     }
 
-    // v8 end
+    // v10 end
 
     // ************ comment out old onAccessibilityEvent()
     @Override
@@ -1369,19 +1380,11 @@ commandMap
                     String match = matches.get(0);
                     //                  inputTxt.setText(match);
                     Log.d(debugLogTag, match);
-                    if (match.contains("show me")) {
-                        Log.d("duc", "sdds");
-                        Intent intent = new Intent(Intent.ACTION_VIEW);
-                        intent.setComponent(new ComponentName("com.cookware.worldcusinerecipes", "com.cookware.worldcusinerecipes.MyRecipesGridActivity"));
-                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(intent);
-                    } else {
+
                         long startedTime = System.currentTimeMillis(); // Start timing
                         executeCommand(match);
                         long endedTime = System.currentTimeMillis(); // End timing
-                        Log.d("CommandExecution", "Execution time using voice '" + "': " + (endedTime - startedTime) + " ms");
-
-                    }
+//                        Log.d("CommandExecution", "End-to-End Time using voice: " + (endedTime - startedTime) + " ms");
 
 
                 }
@@ -1400,16 +1403,15 @@ commandMap
                     String match = matches.get(0);
 //                    inputTxt.setText(match);
                     Log.d(debugLogTag, match);
-                    if (match.contains("show me")) {
-                        Log.d("duc", "sdds");
-                        Intent intent = new Intent(Intent.ACTION_VIEW);
-                        intent.setComponent(new ComponentName("com.cookware.worldcusinerecipes", "com.cookware.worldcusinerecipes.MyRecipesGridActivity"));
-                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(intent);
-                    } else {
-                        executeCommand(match);
-                    }
 
+                    long commandStartTime = System.currentTimeMillis();
+                    executeCommand(match);
+                    long commandEndTime = System.currentTimeMillis();
+                    Log.d("CommandExecution", "Parser Execution Time: " + (commandEndTime - commandStartTime) + " ms");
+                    Log.d("EndToEndTiming", "End-to-End Time: " + (commandEndTime - speechStartTime) + " ms");
+
+                    // Reset speechStartTime for next command
+                    speechStartTime = System.currentTimeMillis();
 
                 }
             }
@@ -1418,6 +1420,7 @@ commandMap
             public void onEvent(int eventType, Bundle params) {
                 // reserved by android for future events
             }
+
         });
     }
 
@@ -1440,6 +1443,44 @@ commandMap
         }
         return sentence;
     }
+
+    // v12 (testing using simulated voice)
+    private void simulateVoiceCommand(int audioResId, String simulatedText) {
+        MediaPlayer mediaPlayer = MediaPlayer.create(this, audioResId);
+
+        // Record the start time when audio begins
+        long startTime = System.currentTimeMillis();
+
+        // Get the audio duration
+        int audioDuration = mediaPlayer.getDuration();
+
+        // Start playing the audio
+        mediaPlayer.start();
+
+        // Simulate the processing by delaying the results
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            // Simulate onResults callback with the transcribed text
+            onResultsSimulated(simulatedText, startTime);
+            mediaPlayer.release();
+        }, audioDuration);
+    }
+
+    private void onResultsSimulated(String simulatedText, long startTime) {
+        ArrayList<String> matches = new ArrayList<>();
+        matches.add(simulatedText);
+
+        // Simulating the onResults call
+        Log.d("SimulatedRecognizer", "Simulated recognized text: " + simulatedText);
+
+        // Pass the simulated text to your executeCommand function
+        executeCommand(simulatedText);
+
+        // Measure the total end-to-end time
+        long endTime = System.currentTimeMillis();
+        Log.d("CommandExecution", "End-to-End Time using simulated voice: " + (endTime - startTime) + " ms");
+    }
+    // v12 updated end
+
 
     // ***********commented out
 //    private void executeCommand(String sentence) {
@@ -1620,8 +1661,6 @@ commandMap
 //    }
 // ***********commented out END
 
-
-
     public void getScrollableNode(AccessibilityNodeInfo currentNode) {
         /**
          * Get all the scrollable node in the current screen.
@@ -1760,24 +1799,44 @@ commandMap
         currentTime = date.getTime();
         createSwitch();
         initializeSpeechRecognition();                      // Checking permissions & initialising speech recognition
+
+        // v12 Testing using simulated voice
+//        simulateVoiceCommand(R.raw.open_youtube, "open youtube");
+//        simulateVoiceCommand(R.raw.swipe_up, "swipe up");
+//        simulateVoiceCommand(R.raw.open_chrome, "open chrome");
+//        simulateVoiceCommand(R.raw.open_fast_notepad, "open fast notepad");
+//        simulateVoiceCommand(R.raw.open_settings, "open settings");
+
+//        simulateVoiceCommand(R.raw.open_world_cuisines_show_me_view_videos_bookmarked, "open world cuisines show me view videos bookmarked");
+//        simulateVoiceCommand(R.raw.open_world_cuisines_go_to_view_video_search, "open world cuisines go to view video search");
+//        simulateVoiceCommand(R.raw.open_world_cuisines_show_me_view_favorite_detail, "open world cuisines show me view favorite detail");
+//        simulateVoiceCommand(R.raw.open_world_cuisines_show_me_view_user_profile, "open world cuisines show me view user profile");
+//        simulateVoiceCommand(R.raw.open_world_cuisines_show_me_view_recipe_store, "open world cuisines show me view recipe store");
+
+        // v12 end
         loadData();
         loadAPIConnection();
         getDisplayMetrics();
         Log.d(debugLogTag, "Service Connected");
         //createText2VecModel();
 
+        // testing voice commands by text
+//        String testCommand = "open youtube";
+//        String testCommand = "swipe up";
+//        String testCommand = "open chrome";
+//        String testCommand = "open fast notepad";
+//        String testCommand = "open settings";
+
 //        String testCommand = "open world cuisines show me VIEW Videos Bookmarked";
 //        String testCommand = "open world cuisines go to VIEW Video Search";
 //        String testCommand = "open world cuisines show me View favorite detail";
 //        String testCommand = "open world cuisines show me view user profile";
 //        String testCommand = "open world cuisines show me view recipe store";
-        String testCommand = "scroll up";
-
 
 
 //        String testCommand = "open youtube and search hi and hello";
 
-        executeCommand(testCommand); // This simulates the command input without using the microphone
+//        executeCommand(testCommand); // This simulates the command input without using the microphone
 
         autoReloadHandler.post(runnable);
     }
@@ -1941,6 +2000,10 @@ commandMap
                     listenButton.setText("Stop");
                     listenButton.setBackgroundResource(R.drawable.stop_btn);
                     isVoiceCommandConnected = true;
+
+                    // v11
+                    speechStartTime = System.currentTimeMillis(); // Start timing
+                    // v11
                     speechRecognizer.startListening(speechRecognizerIntent);       // on click listener to start listening audio
                 } else {
                     listenButton.setText("Start");
