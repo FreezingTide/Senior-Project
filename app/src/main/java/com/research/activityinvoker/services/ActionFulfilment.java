@@ -231,18 +231,6 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
                 return;
             }
 
-//            // Handle remaining tokens (subcommands) if present
-//            String[] remainingTokens = Arrays.copyOfRange(tokens, appNameEndIndex + 1, tokens.length);
-//            Log.d("OpenCommand", "Passing remaining tokens to subcommands: " + Arrays.toString(remainingTokens));
-//
-//            HashMap<String, Object> appSubcommands = getSubcommandsForApp(appNameBuilder.toString());
-//            if (appSubcommands != null) {
-//                traverseCommandMap(remainingTokens, appSubcommands, 0);
-//            } else {
-//                Log.e("OpenCommand", "No subcommands for app: " + appNameBuilder.toString());
-//            }
-//        }
-
 // Handle remaining tokens
             // Define valid transition words
             List<String> transitionWords = Arrays.asList("and", "go", "then", "so", "next", "after");
