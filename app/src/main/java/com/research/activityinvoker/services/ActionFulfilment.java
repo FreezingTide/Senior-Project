@@ -1151,10 +1151,10 @@ commandMap
             removeAllTooltips();    // remove all old  tooltip when screen changed
             currentSource = getRootInActiveWindow(); // update the current root node
 
-            if (isVoiceCommandConnected && currentSource != null) {
-                printOutAllClickableElement(getRootInActiveWindow(), 0, event); // call function for root node
-                uiElements.remove("blocked numbers storage");
-            }
+//            if (isVoiceCommandConnected && currentSource != null) {
+//                printOutAllClickableElement(getRootInActiveWindow(), 0, event); // call function for root node
+//                uiElements.remove("blocked numbers storage");
+//            }
             Log.d("test", uiElements.toString());
             this.executeCommand("");
         }
