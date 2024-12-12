@@ -233,7 +233,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
 
 // Handle remaining tokens
             // Define valid transition words
-            List<String> transitionWords = Arrays.asList("and", "go", "then", "so", "next", "after");
+            List<String> transitionWords = Arrays.asList("and", "then", "so", "next", "after");
 
             // Define delay duration in milliseconds
             final long DELAY_BETWEEN_COMPLEX_COMMANDS_MS = 1000;
