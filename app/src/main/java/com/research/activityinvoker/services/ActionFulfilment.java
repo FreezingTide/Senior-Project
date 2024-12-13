@@ -236,7 +236,7 @@ public class ActionFulfilment extends AccessibilityService implements View.OnTou
             List<String> transitionWords = Arrays.asList("and", "then", "so", "next", "after");
 
             // Define delay duration in milliseconds
-            final long DELAY_BETWEEN_COMPLEX_COMMANDS_MS = 1000;
+            final long DELAY_BETWEEN_COMPLEX_COMMANDS_MS = 1650;
 
             String[] remainingTokens = Arrays.copyOfRange(tokens, appNameEndIndex + 1, tokens.length);
 
@@ -1469,7 +1469,7 @@ commandMap
                     executeCommand(match);
                     long commandEndTime = System.currentTimeMillis();
                     Log.d("CommandExecution", "Parser Execution Time: " + (commandEndTime - commandStartTime) + " ms");
-                    Log.d("EndToEndTiming", "End-to-End Time: " + (commandEndTime - speechStartTime) + " ms");
+//                    Log.d("EndToEndTiming", "End-to-End Time: " + (commandEndTime - speechStartTime) + " ms");
 
                     // Reset speechStartTime for next command
                     speechStartTime = System.currentTimeMillis();
@@ -2209,7 +2209,7 @@ commandMap
                 appMap.put(appName, packageInfo.packageName); // add new, replaced "this.appNames.add(appName); from original function"
 
                 // Log when an app is added to appMap
-//                Log.d("AppMapLoad", "Added to map: " + appName + " -> " + packageInfo.packageName);
+                Log.d("AppMapLoad", "Added to map: " + appName + " -> " + packageInfo.packageName);
 
             } catch (PackageManager.NameNotFoundException e) {
                 e.printStackTrace();                // handling app not found exception
